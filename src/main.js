@@ -1,28 +1,58 @@
 import { C } from './config.js';
+import { ROBOTS, PLAYER_ROBOT } from './robots.js';
 import { P } from './phrases.js';
 import { input } from './input.js';
 import { World } from './world.js';
 import { Track } from './track.js';
 import { Robot } from './robot.js';
 import { hud } from './hud.js';
+import { Skids } from './skids.js';
+import { Menu } from './menu.js';
 
 const world = new World(document.getElementById('game'));
 const track = new Track(world.scene);
-const bot = new Robot(world.scene);
-
-// Старт: чуть позади линии, носом по ходу трассы
-const s0 = track.at(-6);
-bot.x = track.p[s0].x; bot.z = track.p[s0].z; bot.a = Math.atan2(track.t[s0].z, track.t[s0].x); bot.seg = s0;
-world.follow(bot, 0, true);
+const skids = new Skids(world.scene);
 hud.initMap(track);
 hud.clock(); setInterval(() => hud.clock(), 30000);
-setTimeout(() => hud.say(P.start, 2200), 600);
-setTimeout(() => hud.hideHint(), 9000);
 
-const race = { lap: 0, lapStart: 0, best: 0, started: false, lastSeg: s0 };
-const st = { wasManual: false, lastWallSay: 0, lastDriftSay: 0, lastChargeSay: 0, warned: false, wasDrift: false };
+let bot = null, race = null, st = null, mode = 'menu';
+window.__game = { track, skids };   // для отладки из консоли
+
+// Гонка с выбранным роботом: старт чуть позади линии, носом по ходу трассы
+function startRace(id) {
+  if (bot) world.scene.remove(bot.mesh);
+  bot = new Robot(world.scene, ROBOTS[id]);
+  const s0 = track.at(-6);
+  bot.x = track.p[s0].x; bot.z = track.p[s0].z; bot.a = Math.atan2(track.t[s0].z, track.t[s0].x); bot.seg = s0;
+  race = { lap: 0, lapStart: 0, best: 0, started: false, lastSeg: s0 };
+  st = { pitting: false, wasManual: false, lastWallSay: 0, lastDriftSay: 0, lastChargeSay: 0, warned: false, wasDrift: false };
+  input.keys = {}; input.lastKeyTime = 0;
+  skids.clear();
+  world.follow(bot, 0, true);
+  hud.robot(bot.spec.name);
+  Object.assign(window.__game, { bot, st, race });
+  menu.hide(); mode = 'race';
+  hud.showHint();
+  setTimeout(() => hud.say(P.start, 2200), 600);
+  clearTimeout(startRace.hintT); startRace.hintT = setTimeout(() => hud.hideHint(), 9000);
+}
+
+const menu = new Menu(startRace);
+menu.show(PLAYER_ROBOT);
+addEventListener('keydown', e => { if (e.code === 'Escape' && mode === 'race') { mode = 'menu'; menu.show(bot.spec.id); } });
+
+// Пока открыто меню, камера медленно едет вдоль трассы
+const ghost = { x: 0, z: 0, a: 0, v: 0, lat: 0, i: 0 };
+function menuCamera(dt) {
+  ghost.i = (ghost.i + dt * 8) % track.n;
+  const p = track.p[Math.floor(ghost.i)];
+  ghost.x = p.x; ghost.z = p.z;
+  world.follow(ghost, dt);
+}
 
 function update(t, dt) {
+  // Пока игрок стоит на пит-стопе, автопилот не перехватывает управление
+  if (st.wasManual && bot.onPad && bot.speed() < 2) input.lastKeyTime = t;
   const manual = !bot.dead && input.lastKeyTime > 0 && t - input.lastKeyTime < C.manualTimeoutMs;
   if (manual !== st.wasManual) { st.wasManual = manual; hud.say(manual ? P.manualOn : P.manualOff); }
 
@@ -30,12 +60,23 @@ function update(t, dt) {
   if (bot.dead) {
     bot.v *= Math.exp(-3 * dt); bot.drifting = false;
     if (t > bot.deadUntil) { bot.dead = false; bot.bat = Math.max(bot.bat, C.battEmergency); hud.say(P.batRevive, 2400); }
-  } else if (manual) bot.manual(input.keys, dt);
-  else bot.auto(track, dt);
+  } else if (manual) { bot.manual(input.keys, dt); st.pitting = false; }
+  else {
+    bot.auto(track, dt);
+    // Автопилот заезжает на пит-стоп только при низком заряде: тормозит к площадке и стоит до полной зарядки
+    if (!st.pitting && bot.bat < C.autoPitBelow) st.pitting = true;
+    if (st.pitting) {
+      const mid = Math.round((track.padFrom + track.padTo) / 2);
+      const ahead = (mid - bot.seg + track.n) % track.n * C.sampleStep;   // расстояние до центра площадки
+      if (bot.onPad) bot.v = Math.max(0, bot.v - bot.s.brake * dt);
+      else if (ahead < 40) bot.v = Math.min(bot.v, 3 + ahead * 0.45);
+      if (bot.bat >= 100) st.pitting = false;
+    }
+  }
 
   const hit = bot.integrate(track, a0, dt);
   if (hit > 6) {
-    bot.bat = Math.max(0, bot.bat - C.drain.wall);
+    bot.bat = Math.max(0, bot.bat - C.drain.wall * bot.s.mass);
     if (t - st.lastWallSay > 2500) { st.lastWallSay = t; hud.say(P.wall); }
   }
   if (bot.drifting && !st.wasDrift && t - st.lastDriftSay > 3500) { st.lastDriftSay = t; hud.say(P.drift, 1500); }
@@ -43,6 +84,7 @@ function update(t, dt) {
 
   // Круги: пересечение старта вперёд
   const seg = bot.seg, n = track.n;
+  bot.onPad = track.onPad(seg) && Math.abs(track.lateral(seg, bot.x, bot.z)) < track.half * 0.45;
   if (race.lastSeg > n * 0.8 && seg < n * 0.2) {
     if (race.started) {
       const lapMs = t - race.lapStart;
@@ -57,26 +99,34 @@ function update(t, dt) {
 
   // Батарея: заряжается на зелёной площадке, иначе расходуется
   const spd = bot.speed();
-  const charging = track.onPad(seg) && Math.abs(track.lateral(seg, bot.x, bot.z)) < track.half * 0.45 && bot.bat < 100;
-  if (charging) {
+  // На площадке заряд только растёт до 100% и не тратится — иначе значение дёргается у 100%
+  const charging = bot.onPad && bot.bat < 100;
+  if (bot.onPad) {
     bot.bat = Math.min(100, bot.bat + C.padCharge * dt);
-    if (t - st.lastChargeSay > 8000) { st.lastChargeSay = t; hud.say(P.charging, 1400); }
-  } else if (!bot.dead) bot.bat = Math.max(0, bot.bat - (C.drain.base + spd * C.drain.speed + (bot.drifting ? C.drain.drift : 0)) * dt);
+    if (charging && t - st.lastChargeSay > 8000) { st.lastChargeSay = t; hud.say(P.charging, 1400); }
+  } else if (!bot.dead) bot.bat = Math.max(0, bot.bat - (C.drain.base + spd * C.drain.speed * bot.s.mass + (bot.drifting ? C.drain.drift : 0)) * dt);
   if (bot.bat > 30) st.warned = false;
   if (bot.bat < 20 && !st.warned) { st.warned = true; hud.say(P.batWarn, 2400); }
   if (bot.bat <= 0 && !bot.dead) { bot.dead = true; bot.deadUntil = t + C.deadMs; hud.say(P.batDead, 3000); }
   hud.battery(bot.bat, charging);
   hud.speed(spd);
+  hud.health(bot.hp, bot.s.hp);
 }
 
 let last = 0;
 function loop(t) {
   const dt = Math.min((t - last) / 1000 || 0, 0.05); last = t;
-  update(t, dt);
-  bot.render(dt, t);
-  world.follow(bot, dt);
-  hud.drawMap(bot);
-  hud.placeSay(bot, world.camera);
+  if (mode === 'race') {
+    update(t, dt);
+    bot.render(dt, t);
+    skids.update(bot);
+    world.follow(bot, dt);
+    hud.drawMap(bot);
+    hud.placeSay(bot, world.camera);
+  } else {
+    menuCamera(dt);
+    menu.render(t);
+  }
   world.render();
   requestAnimationFrame(loop);
 }

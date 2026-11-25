@@ -2,7 +2,7 @@ import { fmtTime, pick } from './util.js';
 
 const $ = id => document.getElementById(id);
 const D = { lap: $('lap'), time: $('time'), best: $('best'), batt: $('batt'), fill: $('battfill'), pct: $('battpct'),
-  clock: $('clock'), say: $('say'), hint: $('hint'), map: $('minimap'), spd: $('spd') };
+  clock: $('clock'), rname: $('rname'), hpfill: $('hpfill'), hpval: $('hpval'), say: $('say'), hint: $('hint'), map: $('minimap'), spd: $('spd') };
 
 export const hud = {
   // Мини-карта: трасса вписывается в canvas один раз, затем рисуем точку робота
@@ -47,6 +47,13 @@ export const hud = {
     D.batt.className = (pct < 20 ? 'low' : pct < 40 ? 'mid' : '') + (charging ? ' chg' : '');
   },
 
+  robot(name) { D.rname.textContent = name; },
+
+  health(hp, max) {
+    D.hpfill.style.width = Math.max(0, hp / max * 100) + '%';
+    D.hpval.textContent = Math.ceil(hp) + ' ХП';
+  },
+
   speed(v) { D.spd.textContent = Math.round(v * 6); },   // условные «км/ч»
 
   clock() { const d = new Date(); D.clock.textContent = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); },
@@ -65,4 +72,5 @@ export const hud = {
   },
 
   hideHint() { D.hint.style.opacity = 0; },
+  showHint() { D.hint.style.opacity = 1; },
 };

@@ -1,47 +1,34 @@
-import * as THREE from 'three';
 import { C } from './config.js';
 import { clamp, approach, wrap } from './util.js';
+import { buildModel } from './models.js';
 
-// Модель робота-пылесоса. Нос смотрит вдоль локальной +X.
-function buildMesh() {
-  const g = new THREE.Group();
-  const R = C.botR;
-  const shell = new THREE.MeshStandardMaterial({ color: '#f1edf2', roughness: 0.35, metalness: 0.1 });
-  const dark = new THREE.MeshStandardMaterial({ color: '#2a2230', roughness: 0.5 });
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(R, R * 1.03, 0.55, 40), shell);
-  body.position.y = 0.38; body.castShadow = true; g.add(body);
-  const lid = new THREE.Mesh(new THREE.CylinderGeometry(R * 0.78, R * 0.82, 0.12, 40), dark);
-  lid.position.y = 0.71; g.add(lid);
-  const tower = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.36, 0.22, 24), shell);
-  tower.position.set(-0.2, 0.86, 0); tower.castShadow = true; g.add(tower);
-  // Бампер спереди
-  const bumper = new THREE.Mesh(new THREE.TorusGeometry(R * 1.02, 0.12, 8, 30, Math.PI * 0.9), dark);
-  bumper.rotation.set(Math.PI / 2, 0, -Math.PI * 0.45); bumper.position.y = 0.3; g.add(bumper);
-  // Глаза-светодиоды (меняют цвет по состоянию)
-  const eyeMat = new THREE.MeshBasicMaterial({ color: '#6ef0ff' });
-  for (const s of [-1, 1]) {
-    const e = new THREE.Mesh(new THREE.SphereGeometry(0.13, 12, 8), eyeMat);
-    e.position.set(R * 0.72, 0.76, s * 0.32); g.add(e);
-  }
-  // Боковые щётки
-  const brushMat = new THREE.MeshStandardMaterial({ color: '#ff5b3a' });
-  const brushes = [];
-  for (const s of [-1, 1]) {
-    const b = new THREE.Group();
-    for (let k = 0; k < 3; k++) {
-      const bristle = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.04, 0.06), brushMat);
-      bristle.position.x = 0.35; bristle.rotation.y = k * Math.PI * 2 / 3;
-      const holder = new THREE.Group(); holder.rotation.y = k * Math.PI * 2 / 3; holder.add(bristle); b.add(holder);
-    }
-    b.position.set(R * 0.75, 0.1, s * R * 0.75); g.add(b); brushes.push({ obj: b, dir: s });
-  }
-  return { group: g, eyeMat, brushes };
+// Вращение колёс, лопастей и щёток: от скорости робота плюс постоянное «холостое» вращение
+export function spinAll(spinners, v, dt) {
+  for (const s of spinners) s.obj.rotation[s.axis] += ((s.idle || 0) * Math.sign(s.k) + v * s.k) * dt;
+}
+
+// Ходовые характеристики из паспорта робота: силы делятся на массу (описание формул — в config.js)
+export function derive(spec) {
+  const m = spec.mass, sq = Math.sqrt(m);
+  return {
+    mass: m, radius: spec.radius, hp: spec.hp, maxSpeed: spec.maxSpeed, backMax: spec.backMax, turn: spec.turn,
+    accel: spec.power / m,
+    brake: spec.brakeForce / m,
+    friction: spec.rollDrag / m,
+    steerAccel: spec.steerTorque / m,
+    grip: spec.grip,
+    gripSlide: spec.slideGrip / sq,
+    restitution: spec.bounce / sq,
+  };
 }
 
 export class Robot {
-  constructor(scene) {
-    const m = buildMesh();
-    this.mesh = m.group; this.eyeMat = m.eyeMat; this.brushes = m.brushes;
+  constructor(scene, spec) {
+    this.spec = spec;
+    this.s = derive(spec);
+    const m = buildModel(spec);   // модель — см. models.js
+    this.hp = this.s.hp;   // текущее здоровье; урон пока не наносится — это задел под бои
+    this.mesh = m.group; this.eyeMat = m.eyeMat; this.spinners = m.spinners;
     this.mesh.rotation.order = 'YXZ';   // крен — вокруг собственной продольной оси
     scene.add(this.mesh);
     // Состояние: позиция на плоскости XZ, угол, скорость вдоль носа (v) и боком (lat)
@@ -50,16 +37,16 @@ export class Robot {
 
   speed() { return Math.hypot(this.v, this.lat); }
 
-  // Ручное управление: инерция и дрифт
+  // Ручное управление: инерция; на скорости в крутом повороте робота немного сносит (см. integrate)
   manual(keys, dt) {
-    const sp = this.speed();
-    this.drifting = !!(keys[' '] || keys.Shift) && sp > C.driftMinSpeed;
-    const tr = C.turn * (this.drifting ? 1.6 : 1);
-    if (keys.ArrowLeft) this.a -= tr * dt;
-    if (keys.ArrowRight) this.a += tr * dt;
-    if (keys.ArrowUp) this.v = approach(this.v, C.maxSpeed, C.accel * (this.drifting ? 0.7 : 1), dt);
-    else if (keys.ArrowDown) this.v = approach(this.v, -C.backMax, C.brake, dt);
-    else this.v = approach(this.v, 0, C.friction, dt);
+    // руль тоже с инерцией: скорость поворота набирается и спадает плавно
+    const s = this.s;
+    const want = ((keys.ArrowRight ? 1 : 0) - (keys.ArrowLeft ? 1 : 0)) * s.turn;
+    this.w = approach(this.w || 0, want, s.steerAccel, dt);
+    this.a += this.w * dt;
+    if (keys.ArrowUp) this.v = approach(this.v, s.maxSpeed, s.accel, dt);
+    else if (keys.ArrowDown) this.v = approach(this.v, -s.backMax, s.brake, dt);
+    else this.v = approach(this.v, 0, s.friction, dt);
   }
 
   // Автопилот: едет к точке впереди по центру трассы, на крутых поворотах сбрасывает скорость
@@ -68,9 +55,9 @@ export class Robot {
     const p = track.p[track.at(this.seg + look)];
     const diff = wrap(Math.atan2(p.z - this.z, p.x - this.x) - this.a);
     this.a += clamp(diff, -C.autoTurn * dt, C.autoTurn * dt);
-    const want = C.autoSpeed * (Math.abs(diff) > 0.5 ? 0.6 : 1);
-    this.v = approach(this.v, want, C.accel, dt);
-    this.drifting = false;
+    this.w = 0;
+    const want = C.autoSpeed * this.s.maxSpeed * (Math.abs(diff) > 0.5 ? 0.6 : 1);
+    this.v = approach(this.v, want, this.s.accel, dt);
   }
 
   // Отражение скорости от поверхности с нормалью (nx, nz); возвращает силу удара
@@ -89,7 +76,12 @@ export class Robot {
     // поворот носа не поворачивает скорость: часть уходит в боковую — это и есть занос
     const da = this.a - a0;
     if (da) { const c = Math.cos(da), s = Math.sin(da), v2 = this.v * c + this.lat * s; this.lat = -this.v * s + this.lat * c; this.v = v2; }
-    this.lat *= Math.exp(-(this.drifting ? C.gripDrift : C.grip) * dt);
+    // Сцепление падает, когда резко поворачиваем на скорости — получается лёгкий снос
+    const s = this.s;
+    const turnRate = Math.abs(da) / (dt || 1), fast = clamp((this.v - C.slideMinSpeed) / (s.maxSpeed - C.slideMinSpeed), 0, 1);
+    const slide = clamp(turnRate / s.turn, 0, 1) * fast;
+    this.lat *= Math.exp(-(s.grip + (s.gripSlide - s.grip) * slide) * dt);
+    this.drifting = Math.abs(this.lat) > C.slideShowLat;   // для эффектов и реплик
 
     const fx = Math.cos(this.a), fz = Math.sin(this.a);
     this.x += (fx * this.v - fz * this.lat) * dt;
@@ -97,12 +89,12 @@ export class Robot {
 
     // стены: держим робота в пределах ширины дороги
     this.seg = track.nearest(this.x, this.z, this.seg);
-    const d = track.lateral(this.seg, this.x, this.z), lim = track.half - C.botR;
+    const d = track.lateral(this.seg, this.x, this.z), lim = track.half - s.radius;
     let hit = 0;
     if (Math.abs(d) > lim) {
       const m = track.nrm[this.seg], s = Math.sign(d);
       this.x -= m.x * s * (Math.abs(d) - lim); this.z -= m.z * s * (Math.abs(d) - lim);
-      hit = this.bounce(-m.x * s, -m.z * s, C.restitution);
+      hit = this.bounce(-m.x * s, -m.z * s, this.s.restitution);
     }
     return hit;
   }
@@ -112,8 +104,7 @@ export class Robot {
     this.mesh.rotation.y = -this.a;
     // лёгкий крен в заносе
     this.mesh.rotation.x = clamp(-this.lat * 0.012, -0.15, 0.15);
-    const spin = (4 + this.speed() * 1.2) * dt;
-    for (const b of this.brushes) b.obj.rotation.y += spin * b.dir;
+    spinAll(this.spinners, this.v, dt);
     this.eyeMat.color.set(this.dead ? '#333' : this.bat < 20 ? (Math.floor(t / 300) % 2 ? '#ff3b30' : '#551010') : this.drifting ? '#ffcc00' : '#6ef0ff');
   }
 }

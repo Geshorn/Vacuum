@@ -1,18 +1,18 @@
-// Клавиатура. Стрелки — руль и газ, пробел или Shift — дрифт.
-const TRACKED = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' ', 'Shift']);
-const ARROWS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']);
+// Клавиатура: стрелки или WASD (по физической клавише, работает и в русской раскладке)
+const MAP = {
+  ArrowLeft: 'ArrowLeft', ArrowRight: 'ArrowRight', ArrowUp: 'ArrowUp', ArrowDown: 'ArrowDown',
+  KeyA: 'ArrowLeft', KeyD: 'ArrowRight', KeyW: 'ArrowUp', KeyS: 'ArrowDown',
+};
 
 export const input = { keys: {}, lastKeyTime: 0 };
 
-window.addEventListener('keydown', e => {
-  if (!TRACKED.has(e.key)) return;
-  if (e.key !== 'Shift') e.preventDefault();
-  input.keys[e.key] = true;
-  if (ARROWS.has(e.key)) input.lastKeyTime = performance.now();
-});
-window.addEventListener('keyup', e => {
-  if (!TRACKED.has(e.key)) return;
-  input.keys[e.key] = false;
-  if (ARROWS.has(e.key)) input.lastKeyTime = performance.now();
-});
+function onKey(e, down) {
+  const k = MAP[e.code];
+  if (!k || e.ctrlKey || e.metaKey || e.altKey) return;
+  e.preventDefault();
+  input.keys[k] = down;
+  input.lastKeyTime = performance.now();
+}
+window.addEventListener('keydown', e => onKey(e, true));
+window.addEventListener('keyup', e => onKey(e, false));
 window.addEventListener('blur', () => { input.keys = {}; });
