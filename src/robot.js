@@ -19,6 +19,8 @@ export function derive(spec) {
     grip: spec.grip,
     gripSlide: spec.slideGrip / sq,
     restitution: spec.bounce / sq,
+    // во сколько раз робот тратит заряд быстрее эталона: растёт с массой, но мягко (Сейф ×1.55, Пульт ×0.73)
+    drainMul: spec.drainMul ?? Math.pow(m, C.drainMassPow),
   };
 }
 

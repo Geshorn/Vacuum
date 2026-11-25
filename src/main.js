@@ -64,7 +64,7 @@ function update(t, dt) {
   else {
     bot.auto(track, dt);
     // Автопилот заезжает на пит-стоп только при низком заряде: тормозит к площадке и стоит до полной зарядки
-    if (!st.pitting && bot.bat < C.autoPitBelow) st.pitting = true;
+    if (!st.pitting && bot.bat < Math.min(80, C.autoPitBelow * bot.s.drainMul)) st.pitting = true;
     if (st.pitting) {
       const mid = Math.round((track.padFrom + track.padTo) / 2);
       const ahead = (mid - bot.seg + track.n) % track.n * C.sampleStep;   // расстояние до центра площадки
@@ -76,7 +76,7 @@ function update(t, dt) {
 
   const hit = bot.integrate(track, a0, dt);
   if (hit > 6) {
-    bot.bat = Math.max(0, bot.bat - C.drain.wall * bot.s.mass);
+    bot.bat = Math.max(0, bot.bat - C.drain.wall * bot.s.drainMul);
     if (t - st.lastWallSay > 2500) { st.lastWallSay = t; hud.say(P.wall); }
   }
   if (bot.drifting && !st.wasDrift && t - st.lastDriftSay > 3500) { st.lastDriftSay = t; hud.say(P.drift, 1500); }
@@ -104,7 +104,7 @@ function update(t, dt) {
   if (bot.onPad) {
     bot.bat = Math.min(100, bot.bat + C.padCharge * dt);
     if (charging && t - st.lastChargeSay > 8000) { st.lastChargeSay = t; hud.say(P.charging, 1400); }
-  } else if (!bot.dead) bot.bat = Math.max(0, bot.bat - (C.drain.base + spd * C.drain.speed * bot.s.mass + (bot.drifting ? C.drain.drift : 0)) * dt);
+  } else if (!bot.dead) bot.bat = Math.max(0, bot.bat - (C.drain.base + spd * C.drain.speed + (bot.drifting ? C.drain.drift : 0)) * bot.s.drainMul * dt);
   if (bot.bat > 30) st.warned = false;
   if (bot.bat < 20 && !st.warned) { st.warned = true; hud.say(P.batWarn, 2400); }
   if (bot.bat <= 0 && !bot.dead) { bot.dead = true; bot.deadUntil = t + C.deadMs; hud.say(P.batDead, 3000); }
