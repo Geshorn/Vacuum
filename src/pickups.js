@@ -11,6 +11,7 @@ export const WEAPONS = {
   banana: { name: 'Банановая кожура', icon: '🍌' },
   cap:    { name: 'Пробка',          icon: '🍾' },
   rocket: { name: 'Пылевая ракета',  icon: '💨' },
+  turbo:  { name: 'Турбо',           icon: '⚡' },
 };
 
 function boxTexture() {

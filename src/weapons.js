@@ -145,6 +145,11 @@ export class Combat {
       const n = Math.round(T.time * T.rate);
       for (let k = 0; k < n; k++) this.queue.push({ bot, at: now + k / T.rate });
       bot.firingUntil = now + T.time;
+    } else if (w === 'turbo') {
+      // ⚡ Турбо: рывок за счёт батареи
+      bot.boostUntil = now + W().turbo.time;
+      bot.bat = Math.max(1, bot.bat - W().turbo.battery);
+      this.showFlame(bot, true);
     } else if (w === 'rocket') {
       this.shootRocket(bot, now, bots);
     } else if (w === 'cap') {
@@ -181,6 +186,21 @@ export class Combat {
       s.scale.y = 0.6; s.position.y = 0.6; bot.mesh.add(s); bot.shieldMesh = s;
     }
     if (!on && bot.shieldMesh) { bot.mesh.remove(bot.shieldMesh); bot.shieldMesh = null; }
+  }
+
+  // Пламя турбо: два голубых конуса позади робота
+  showFlame(bot, on) {
+    if (on && !bot.flameMesh) {
+      const g = new THREE.Group(), R = bot.s.radius;
+      for (const s of [-1, 1]) {
+        const f = new THREE.Mesh(new THREE.ConeGeometry(0.45, 2.6, 10), new THREE.MeshBasicMaterial({ color: '#8fd4ff', transparent: true, opacity: 0.85, depthWrite: false }));
+        f.rotation.z = Math.PI / 2; f.position.set(-R - 1.2, 0.5, s * R * 0.45); g.add(f);
+        const core = new THREE.Mesh(new THREE.ConeGeometry(0.22, 1.6, 8), new THREE.MeshBasicMaterial({ color: '#ffffff' }));
+        core.rotation.z = Math.PI / 2; core.position.set(-R - 0.8, 0.5, s * R * 0.45); g.add(core);
+      }
+      bot.mesh.add(g); bot.flameMesh = g;
+    }
+    if (!on && bot.flameMesh) { bot.mesh.remove(bot.flameMesh); bot.flameMesh = null; }
   }
 
   shoot(bot) {
@@ -271,6 +291,14 @@ export class Combat {
     }
     this.pellets = this.pellets.filter(p => { if (p.life > 0) return true; this.group.remove(p.mesh); return false; });
 
+    // турбо: держим скорость выше обычного максимума, пламя мерцает
+    for (const b of bots) {
+      if (b.boostUntil > now) {
+        if (!b.inLane) b.v = Math.max(b.v, b.s.maxSpeed * W().turbo.speed);
+        if (b.flameMesh) b.flameMesh.scale.x = 0.8 + Math.random() * 0.5;
+      } else if (b.flameMesh) this.showFlame(b, false);
+    }
+
     // губки: время вышло — убрать
     for (const b of bots) if (b.shieldMesh && !(b.shieldUntil > now)) this.showShield(b, false);
     for (const b of bots) if (b.shieldMesh) b.shieldMesh.rotation.y += dt * 2;
@@ -288,6 +316,7 @@ export class Combat {
     let go = false;
     if (w === 'soap' || w === 'banana') go = others.some(o => o.dot < -0.3 && o.d < A.soapRange) || held > A.maxHold;
     if (w === 'trash') go = b.bin >= W().trash.cost && others.some(o => o.dot > 0.6 && o.d < A.shootRange);
+    if (w === 'turbo') go = (rival.ram != null && !b.inLane) || (held > A.maxHold && !b.inLane);
     if (w === 'rocket') go = others.some(o => o.dot > 0.2 && o.d < 90) || held > A.maxHold;
     if (w === 'cap') go = others.some(o => o.dot > 0.7 && o.d < 55) || held > A.maxHold;
     if (w === 'sponge') go = b.hp < b.s.hp * 0.8 || others.some(o => o.d < 14) || held > A.maxHold;
