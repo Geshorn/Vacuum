@@ -242,7 +242,7 @@ export class Trash {
       if (u.spin) u.spin.rotation.y += dt * (it.kind === 'coin' ? 2.5 : 0.8);   // монетки крутятся, скрепки поблёскивают
       if (u.bob) u.bob.position.y = 0.6 + Math.sin(t * 3 + it.phase) * 0.12;
       for (const bot of active) {
-        const r = bot.s.radius + 0.4;
+        const r = bot.magnetUntil > t ? C.weapons.magnet.radius : bot.s.radius + 0.4;   // магнит тянет издалека
         if ((it.x - bot.x) ** 2 + (it.z - bot.z) ** 2 < r * r) {
           it.alive = false;
           it.anim = { t: 0, x0: it.x, z0: it.z, x: bot.x, z: bot.z, bot };

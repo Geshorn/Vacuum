@@ -12,6 +12,7 @@ export const WEAPONS = {
   cap:    { name: 'Пробка',          icon: '🍾' },
   rocket: { name: 'Пылевая ракета',  icon: '💨' },
   turbo:  { name: 'Турбо',           icon: '⚡' },
+  magnet: { name: 'Магнит',          icon: '🧲' },
 };
 
 function boxTexture() {

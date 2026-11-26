@@ -145,6 +145,8 @@ export class Combat {
       const n = Math.round(T.time * T.rate);
       for (let k = 0; k < n; k++) this.queue.push({ bot, at: now + k / T.rate });
       bot.firingUntil = now + T.time;
+    } else if (w === 'magnet') {
+      this.magnet(bot, now, bots);
     } else if (w === 'turbo') {
       // ⚡ Турбо: рывок за счёт батареи
       bot.boostUntil = now + W().turbo.time;
@@ -186,6 +188,32 @@ export class Combat {
       s.scale.y = 0.6; s.position.y = 0.6; bot.mesh.add(s); bot.shieldMesh = s;
     }
     if (!on && bot.shieldMesh) { bot.mesh.remove(bot.shieldMesh); bot.shieldMesh = null; }
+  }
+
+  // 🧲 Магнит: несколько секунд мусор затягивается с большого радиуса (см. trash.update — bot.magnetUntil),
+  // а у соседей сразу вытягивается часть мусора из контейнера
+  magnet(bot, now, bots) {
+    const P = W().magnet;
+    bot.magnetUntil = now + P.time;
+    let stolen = 0;
+    for (const o of bots) {
+      if (o === bot || !o.mesh.visible || o.bin <= 0 || this.absorb(o, now)) continue;
+      if (Math.hypot(o.x - bot.x, o.z - bot.z) > P.stealRange) continue;
+      const take = Math.min(o.bin * P.stealPct, 100 - bot.bin), val = o.binValue * take / o.bin;
+      o.bin -= take; o.binValue -= val; bot.bin += take; bot.binValue += val; stolen += take;
+    }
+    bot.stolen = stolen;
+    // кольца поля вокруг робота
+    const g = new THREE.Group(); bot.mesh.add(g);
+    for (let k = 0; k < 3; k++) {
+      const r = new THREE.Mesh(new THREE.TorusGeometry(1, 0.08, 6, 32), new THREE.MeshBasicMaterial({ color: k % 2 ? '#ff5b5b' : '#6fa8ff', transparent: true, opacity: 0.7, depthWrite: false }));
+      r.rotation.x = Math.PI / 2; r.position.y = 0.3; g.add(r);
+    }
+    this.extras.push({ mesh: new THREE.Group(), update: (now) => {
+      if (now > bot.magnetUntil || !bot.mesh.visible) { bot.mesh.remove(g); return false; }
+      g.children.forEach((r, k) => { const f = (now * 0.8 + k / 3) % 1; r.scale.setScalar(1 + f * P.radius * 0.9); r.material.opacity = 0.7 * (1 - f); });
+      return true;
+    } });
   }
 
   // Пламя турбо: два голубых конуса позади робота
@@ -316,6 +344,7 @@ export class Combat {
     let go = false;
     if (w === 'soap' || w === 'banana') go = others.some(o => o.dot < -0.3 && o.d < A.soapRange) || held > A.maxHold;
     if (w === 'trash') go = b.bin >= W().trash.cost && others.some(o => o.dot > 0.6 && o.d < A.shootRange);
+    if (w === 'magnet') go = b.bin < 80 && (others.some(o => o.d < W().magnet.stealRange) || held > A.react + 1);
     if (w === 'turbo') go = (rival.ram != null && !b.inLane) || (held > A.maxHold && !b.inLane);
     if (w === 'rocket') go = others.some(o => o.dot > 0.2 && o.d < 90) || held > A.maxHold;
     if (w === 'cap') go = others.some(o => o.dot > 0.7 && o.d < 55) || held > A.maxHold;
