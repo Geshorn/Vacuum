@@ -109,7 +109,8 @@ export const hud = {
 
   // Экран «Выбыл» после взрыва
   onOut(again, menu) { $('o-again').onclick = again; $('o-menu').onclick = menu; },
-  showOut({ robot, laps, best, collected = 0, earned = 0 }) {
+  showOut({ robot, laps, best, collected = 0, earned = 0, place = '—', kills = 0 }) {
+    $('o-place').textContent = place; $('o-kills').textContent = kills;
     $('o-robot').textContent = robot + ' взорвался и выбывает из гонки';
     $('o-laps').textContent = laps; $('o-best').textContent = best ? fmtTime(best) : '—';
     $('o-trash').textContent = collected; $('o-tok').textContent = Math.floor(earned);

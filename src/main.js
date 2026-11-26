@@ -85,7 +85,8 @@ function explode(t) {
   boom = new Explosion(world.scene, bot.x, bot.z, bot.spec.color, bot.s.radius / 1.3);
   hud.say(P.broken, 1500);
   hud.battery(bot.bat, false); hud.health(0, bot.s.hp); hud.speed(0);
-  explode.outT = setTimeout(() => hud.showOut({ robot: bot.spec.name, laps: race.lap, best: race.best, collected: race.collected, earned: race.earned }), 1800);
+  const [pl, tot] = placeOf();
+  explode.outT = setTimeout(() => hud.showOut({ robot: bot.spec.name, laps: race.lap, best: race.best, collected: race.collected, earned: race.earned, place: pl + '/' + tot, kills: race.kills || 0 }), 1800);
 }
 
 // Пока открыто меню, камера медленно едет вдоль трассы
