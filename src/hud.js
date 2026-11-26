@@ -1,4 +1,5 @@
 import { fmtTime, pick } from './util.js';
+import { WEAPONS } from './pickups.js';
 
 const $ = id => document.getElementById(id);
 const D = { lap: $('lap'), time: $('time'), best: $('best'), batt: $('batt'), fill: $('battfill'), pct: $('battpct'),
@@ -14,6 +15,13 @@ export const hud = {
     const ox = (W - (maxX - minX) * s) / 2, oz = (H - (maxZ - minZ) * s) / 2;
     this.toMap = (x, z) => [ox + (x - minX) * s, oz + (z - minZ) * s];
     this.track = track;
+  },
+
+  // Слот оружия: w — ключ из WEAPONS или null (пусто)
+  weapon(w) {
+    const el = $('weapon');
+    if (!w) { el.classList.remove('on'); return; }
+    $('w-icon').textContent = WEAPONS[w].icon; $('w-name').textContent = WEAPONS[w].name; el.classList.add('on');
   },
 
   place(p, total) { $('place').textContent = p + '/' + total; },

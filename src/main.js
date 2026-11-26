@@ -14,6 +14,7 @@ import { Trash } from './trash.js';
 import { Kitchen } from './kitchen.js';
 import { Rival } from './rivals.js';
 import { collideRobots } from './collide.js';
+import { Pickups, WEAPONS } from './pickups.js';
 
 const world = new World(document.getElementById('game'));
 const track = new Track(world.scene);
@@ -21,6 +22,7 @@ const kitchen = new Kitchen(world.scene, track);
 const skids = new Skids(world.scene);
 const smoke = new Smoke(world.scene);
 const trash = new Trash(world.scene, track);
+const pickups = new Pickups(world.scene, track);
 hud.initMap(track);
 hud.clock(); setInterval(() => hud.clock(), 30000);
 
@@ -43,7 +45,7 @@ function startRace(id) {
     const r = new Rival(world.scene, ROBOTS[rid], track), [s, l] = slot(k < 2 ? k : k + 1);
     r.place(s, l); return r;
   });
-  trash.reset();
+  trash.reset(); pickups.reset(); hud.weapon(null);
   st = { pitting: false, wasManual: false, lastWallSay: 0, lastDriftSay: 0, lastChargeSay: 0, warned: false, wasDrift: false };
   input.keys = {}; input.lastKeyTime = 0;
   skids.clear(); smoke.clear();
@@ -242,7 +244,14 @@ function placeOf() {
   return [1 + alive.filter(r => r.progress() > me).length, alive.length + 1];
 }
 
-function updateRivals(t, dt) { for (const r of rivals) r.update(t / 1000, dt, t); }
+function updateRivals(t, dt) {
+  for (const r of rivals) r.update(t / 1000, dt, t);
+  const list = rivals.filter(r => !r.out).map(r => r.bot);
+  if (mode === 'race') list.push(bot);
+  pickups.update(t / 1000, dt, list, (who, w) => {
+    if (who === bot) { hud.weapon(w); hud.say([WEAPONS[w].icon + ' ' + WEAPONS[w].name + '!'], 1400); }
+  });
+}
 
 // Роботы толкаются; урон игроку — с репликами и полоской ХП, соперникам — через их hurt()
 function bumps(t) {
