@@ -37,12 +37,12 @@ export const C = {
   // на внешней стороне поворотов (spot: 'risky'), где легко врезаться.
   trash: {
     kinds: {
-      dust:  { count: 50, fill: 2, value: 1,  spot: 'any' },
-      crumb: { count: 24, fill: 3, value: 3,  spot: 'any' },
-      clip:  { count: 12, fill: 2, value: 6,  spot: 'risky', damage: 2 },   // ещё и царапает корпус
-      coin:  { count: 8,  fill: 1, value: 12, spot: 'risky' },
+      dust:  { count: 120, fill: 2, value: 1,  spot: 'any' },
+      crumb: { count: 55,  fill: 3, value: 3,  spot: 'any' },
+      clip:  { count: 22,  fill: 2, value: 6,  spot: 'risky', damage: 2 },   // ещё и царапает корпус
+      coin:  { count: 14,  fill: 1, value: 12, spot: 'risky' },
     },
-    respawn: [8, 20],      // через сколько секунд собранный мусор появится снова (от..до)
+    respawn: [5, 12],      // через сколько секунд собранный мусор появится снова (от..до)
     suckTime: 0.28,        // сколько секунд мусор затягивается в робота
   },
   bin: {
