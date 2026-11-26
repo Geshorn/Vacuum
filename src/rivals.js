@@ -42,8 +42,10 @@ export class Rival {
       const usePit = b.inLane || this.pitCommit;
       // своя «полоса»: смещение от центра медленно гуляет — соперники не едут гуськом
       this.laneT += dt * 0.3;
-      const lane = Math.sin(this.laneT) * C.rivals.laneWobble + this.lane * 2;
-      b.auto(tr, dt, usePit ? i => tr.pitOff(i) : () => lane, this.speedMul);
+      let lane = Math.sin(this.laneT) * C.rivals.laneWobble + this.lane * 2;
+      if (this.ram != null) lane = Math.max(-tr.half + 2, Math.min(tr.half - 2, this.ram));   // таран: на полосу соперника впереди
+      // на таран чуть прибавляет газу, чтобы догнать
+      b.auto(tr, dt, usePit ? i => tr.pitOff(i) : () => lane, this.speedMul * (this.ram != null ? 1.12 : 1));
       if (usePit && !b.inLane) {
         const toEntry = ((tr.pitStart - b.seg + tr.n) % tr.n) * C.sampleStep;
         if (k >= 0 || toEntry < 30) b.v = Math.min(b.v, C.pit.speedLimit + 4 + Math.max(0, toEntry) * 0.3);

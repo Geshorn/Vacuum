@@ -263,8 +263,25 @@ function updateRivals(t, dt) {
     if (who === bot) { hud.weapon(w); hud.say([WEAPONS[w].icon + ' ' + WEAPONS[w].name + '!'], 1400); }
   });
   const now = t / 1000;
-  for (const r of rivals) if (!r.out) combat.think(r, list, now);
+  // соперники: применяют оружие, таранят того, кто впереди, а с пустым слотом рулят к ближайшей коробке
+  for (const r of rivals) if (!r.out) {
+    combat.think(r, list, now);
+    r.ram = r.bot.weapon ? combat.ramLane(r, list) : boxLane(r);
+  }
   combat.update(now, dt, list, (who, dmg, by, kind) => damage(who, dmg, by, t, kind));
+}
+
+// Смещение к ближайшей целой коробке впереди (или null)
+function boxLane(r) {
+  const b = r.bot, fx = Math.cos(b.a), fz = Math.sin(b.a);
+  if (b.inLane || r.pitting) return null;
+  let best = null, bd = C.rivals.aggro.boxRange;
+  for (const it of pickups.items) {
+    if (!it.alive) continue;
+    const dx = it.x - b.x, dz = it.z - b.z, d = Math.hypot(dx, dz);
+    if (d < bd && (dx * fx + dz * fz) / d > 0.7) { bd = d; best = it; }
+  }
+  return best ? track.lateral(b.seg, best.x, best.z) : null;
 }
 
 // Урон от оружия или удара: игроку — с репликами и полоской ХП, соперникам — через их hurt().

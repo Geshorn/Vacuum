@@ -170,11 +170,28 @@ export class Combat {
     const held = now - rival.gotAt, fx = Math.cos(b.a), fz = Math.sin(b.a);
     const rel = o => { const dx = o.x - b.x, dz = o.z - b.z, d = Math.hypot(dx, dz); return { d, dot: (dx * fx + dz * fz) / (d || 1) }; };
     const others = bots.filter(o => o !== b && o.mesh.visible).map(rel);
+    const A = C.rivals.aggro;
     let go = false;
-    if (w === 'soap') go = others.some(o => o.dot < -0.6 && o.d < 28) || held > 12;
-    if (w === 'trash') go = b.bin >= W().trash.cost && others.some(o => o.dot > 0.85 && o.d < 45);
-    if (w === 'sponge') go = b.hp < b.s.hp * 0.7 || others.some(o => o.d < 10) || held > 10;
-    if (go && held > 0.8 && this.fire(b, now)) rival.gotAt = 0;
+    if (w === 'soap') go = others.some(o => o.dot < -0.3 && o.d < A.soapRange) || held > A.maxHold;
+    if (w === 'trash') go = b.bin >= W().trash.cost && others.some(o => o.dot > 0.6 && o.d < A.shootRange);
+    if (w === 'sponge') go = b.hp < b.s.hp * 0.8 || others.some(o => o.d < 14) || held > A.maxHold;
+    if (go && held > A.react && this.fire(b, now)) { rival.gotAt = 0; return; }
+    // оружие, которым никак не воспользоваться (залп без мусора), выбрасываем — чтобы взять новое из коробок
+    if (held > A.maxHold + 2) { b.weapon = null; rival.gotAt = 0; }
+  }
+
+  // Таран: ближайший соперник прямо впереди и близко — бот смещается на его полосу.
+  // Возвращает смещение от центра трассы, к которому рулить, или null.
+  ramLane(rival, bots) {
+    const b = rival.bot, fx = Math.cos(b.a), fz = Math.sin(b.a), A = C.rivals.aggro;
+    if (b.inLane || rival.pitting) return null;
+    let best = null, bd = A.ramRange;
+    for (const o of bots) {
+      if (o === b || !o.mesh.visible || o.inLane) continue;
+      const dx = o.x - b.x, dz = o.z - b.z, d = Math.hypot(dx, dz);
+      if (d < bd && (dx * fx + dz * fz) / d > 0.75) { bd = d; best = o; }
+    }
+    return best ? this.track.lateral(b.seg, best.x, best.z) : null;
   }
 }
 
