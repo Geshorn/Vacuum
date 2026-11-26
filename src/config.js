@@ -47,6 +47,7 @@ export const C = {
       crumb: { count: 55,  fill: 3, value: 3,  spot: 'any' },
       clip:  { count: 22,  fill: 2, value: 6,  spot: 'risky', damage: 2 },   // ещё и царапает корпус
       coin:  { count: 14,  fill: 1, value: 12, spot: 'risky' },
+      battery: { count: 12, fill: 0, value: 0, spot: 'any', charge: 25 },   // батарейка: не в контейнер, а сразу +25% заряда
     },
     respawn: [5, 12],      // через сколько секунд собранный мусор появится снова (от..до)
     suckTime: 0.28,        // сколько секунд мусор затягивается в робота

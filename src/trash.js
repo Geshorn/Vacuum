@@ -171,7 +171,24 @@ function flatten(g) {
   return g;
 }
 
-const MAKERS = { dust: makeDust, crumb: () => flatten(makeCrumbs()), clip: makeClip, coin: makeCoin };
+// ── Батарейка ────────────────────────────────────────────────────────────────
+// Пальчиковая батарейка лежит на боку, медленно крутится и светится зелёным
+const BAT_BODY = new THREE.MeshStandardMaterial({ color: '#2b2a2c', metalness: 0.4, roughness: 0.35 });
+const BAT_BAND = new THREE.MeshStandardMaterial({ color: '#d9a43a', metalness: 0.8, roughness: 0.25, emissive: '#5a3c00' });
+const BAT_TIP = new THREE.MeshStandardMaterial({ color: '#d4d8dc', metalness: 0.9, roughness: 0.2 });
+const BAT_GLOW = new THREE.MeshBasicMaterial({ color: '#4cd964', transparent: true, opacity: 0.45, depthWrite: false });
+function makeBattery() {
+  const g = new THREE.Group();
+  const glow = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.6, 24), BAT_GLOW); glow.rotation.x = -Math.PI / 2; glow.position.y = 0.05; g.add(glow);
+  const spin = new THREE.Group(); spin.position.y = 0.9; g.add(spin);
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 2.2, 16), BAT_BODY); body.rotation.z = Math.PI / 2; body.castShadow = true; spin.add(body);
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.52, 0.9, 16), BAT_BAND); band.rotation.z = Math.PI / 2; band.position.x = 0.55; spin.add(band);
+  const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.25, 10), BAT_TIP); tip.rotation.z = Math.PI / 2; tip.position.x = 1.22; spin.add(tip);
+  g.userData.spin = spin; g.userData.bob = spin; g.userData.bobBase = 0.9;
+  return g;
+}
+
+const MAKERS = { battery: makeBattery, dust: makeDust, crumb: () => flatten(makeCrumbs()), clip: makeClip, coin: makeCoin };
 
 export class Trash {
   constructor(scene, track) {
@@ -223,7 +240,7 @@ export class Trash {
   // Возвращает собранное за кадр: [{ bot, kind }].
   update(t, dt, bots = []) {
     const got = [], A = C.trash.suckTime;
-    const active = bots.filter(b => b && b.mesh.visible && b.bin < 100);
+    const active = bots.filter(b => b && b.mesh.visible);
     for (const it of this.items) {
       // анимация затягивания: мусор летит к роботу, который его собрал, уменьшается и чуть подлетает
       if (it.anim) {
@@ -240,8 +257,9 @@ export class Trash {
       if (!it.alive) { if (t > it.back) this.place(it); continue; }
       const u = it.mesh.userData;
       if (u.spin) u.spin.rotation.y += dt * (it.kind === 'coin' ? 2.5 : 0.8);   // монетки крутятся, скрепки поблёскивают
-      if (u.bob) u.bob.position.y = 0.6 + Math.sin(t * 3 + it.phase) * 0.12;
+      if (u.bob) u.bob.position.y = (u.bobBase ?? 0.6) + Math.sin(t * 3 + it.phase) * 0.12;
       for (const bot of active) {
+        if (bot.bin >= 100 && it.kind !== 'battery') continue;   // полный контейнер — мусор не берёт (батарейки — можно)
         const r = bot.magnetUntil > t ? C.weapons.magnet.radius : bot.s.radius + 0.4;   // магнит тянет издалека
         if ((it.x - bot.x) ** 2 + (it.z - bot.z) ** 2 < r * r) {
           it.alive = false;

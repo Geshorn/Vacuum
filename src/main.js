@@ -182,6 +182,11 @@ function update(t, dt) {
   // Мусор: роботы собирают его в контейнер, пока тот не полон. Скрепки ещё и царапают корпус.
   for (const { bot: who, kind } of trash.update(t / 1000, dt, [bot, ...rivals.filter(r => !r.out).map(r => r.bot)])) {
     const K = C.trash.kinds[kind];
+    if (K.charge) {                                 // батарейка: сразу в заряд, не в контейнер
+      who.bat = Math.min(100, who.bat + K.charge);
+      if (who === bot) hud.say(P.battery, 1200);
+      continue;
+    }
     if (who !== bot) {                              // соперник
       who.bin = Math.min(100, who.bin + K.fill); who.binValue += K.value;
       if (K.damage) who.rival.hurt(K.damage);
