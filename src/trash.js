@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { C } from './config.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 // Мусор на трассе: пыль, крошки, скрепки, монетки (виды и их вес/ценность — в C.trash.kinds).
 // Робот собирает мусор, проезжая по нему (если контейнер не полон): мусор затягивается в робота,
@@ -151,7 +152,26 @@ function makeCoin() {
   return g;
 }
 
-const MAKERS = { dust: makeDust, crumb: makeCrumbs, clip: makeClip, coin: makeCoin };
+// Склеить непрозрачные детали группы в один объект на материал (крошка из ~13 деталей → 2–3 объекта):
+// меньше вызовов отрисовки, а сама группа по-прежнему двигается и прячется целиком
+function flatten(g) {
+  g.updateMatrixWorld(true);
+  const by = new Map(), drop = [];
+  g.traverse(o => {
+    if (!o.isMesh || o.material.transparent) return;
+    let geo = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+    for (const n of Object.keys(geo.attributes)) if (!['position', 'normal', 'uv'].includes(n)) geo.deleteAttribute(n);
+    if (!geo.attributes.uv) geo.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(geo.attributes.position.count * 2), 2));
+    geo.applyMatrix4(o.matrixWorld);
+    if (!by.has(o.material)) by.set(o.material, []);
+    by.get(o.material).push(geo); drop.push(o);
+  });
+  for (const o of drop) o.parent.remove(o);
+  for (const [m, geos] of by) { const mesh = new THREE.Mesh(mergeGeometries(geos, false), m); mesh.castShadow = true; g.add(mesh); }
+  return g;
+}
+
+const MAKERS = { dust: makeDust, crumb: () => flatten(makeCrumbs()), clip: makeClip, coin: makeCoin };
 
 export class Trash {
   constructor(scene, track) {

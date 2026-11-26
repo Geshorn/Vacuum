@@ -5,7 +5,9 @@ import { C } from './config.js';
 export class World {
   constructor(container) {
     const r = this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    r.setPixelRatio(Math.min(devicePixelRatio, 2));
+    // на экранах высокой плотности (4K, Retina) не рисуем больше 1.5 пикселя на точку — разница почти
+    // не видна, а нагрузка на видеокарту растёт с квадратом этого числа
+    r.setPixelRatio(Math.min(devicePixelRatio, 1.5));
     r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
     r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.1;
     container.appendChild(r.domElement);

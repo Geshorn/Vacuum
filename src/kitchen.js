@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 /* Кухня вокруг трассы. Масштаб «глазами робота»: 1 ед ≈ 7 см (столешница на высоте 13 ед ≈ 90 см).
 
@@ -9,7 +10,13 @@ import * as THREE from 'three';
        а если трасса севернее — нужен зазор ≈ ¾ высоты, иначе предмет закроет робота.
    Это проверяет canPlace(); findSpot() ищет ближайшее к трассе место, где предмет ничего не закрывает. */
 
-const mat = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.7, ...o });
+// Материалы с одинаковыми настройками — общие (так их детали можно склеить в один объект, см. mergeStatic)
+const MATS = new Map();
+const mat = (color, o = {}) => {
+  const key = color + JSON.stringify(o);
+  if (!MATS.has(key)) MATS.set(key, new THREE.MeshStandardMaterial({ color, roughness: 0.7, ...o }));
+  return MATS.get(key);
+};
 const COUNTER_H = 13, DEPTH = 9, GAP = 0.6;   // высота столешницы, глубина шкафов, зазор от гарнитура до трассы
 const GAP_IN = 3;                               // зазор от мебели внутри комнаты до бортика
 
@@ -54,6 +61,38 @@ export class Kitchen {
     this.floor(); this.walls();
     this.northRun(); this.westRun(); this.eastRun();
     this.placeInterior();
+    if (!new URLSearchParams(location.search).has('nomerge')) this.mergeStatic();   // ?nomerge — для сравнения скорости
+  }
+
+  // Оптимизация: тысячи неподвижных деталей склеиваются в общие объекты — по одному на материал в каждом
+  // участке комнаты 64×64 (участки нужны, чтобы невидимое за кадром по-прежнему не рисовалось).
+  // Видеокарте так нужно в разы меньше отдельных вызовов отрисовки. Подвижное (помечено userData.dynamic)
+  // и прозрачное (стекло, вода, пар) не склеиваются.
+  mergeStatic() {
+    this.g.updateMatrixWorld(true);
+    const CELL = 64, buckets = new Map(), victims = [];
+    const isDynamic = o => { for (let p = o; p && p !== this.g; p = p.parent) if (p.userData.dynamic) return true; return false; };
+    this.g.traverse(o => {
+      if (!o.isMesh || o.material.transparent || Array.isArray(o.material) || isDynamic(o)) return;
+      const c = new THREE.Vector3(); o.getWorldPosition(c);
+      const key = `${o.material.uuid}|${o.castShadow ? 1 : 0}|${Math.floor(c.x / CELL)}|${Math.floor(c.z / CELL)}`;
+      let geo = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+      for (const name of Object.keys(geo.attributes)) if (!['position', 'normal', 'uv'].includes(name)) geo.deleteAttribute(name);
+      if (!geo.attributes.normal) geo.computeVertexNormals();
+      if (!geo.attributes.uv) geo.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(geo.attributes.position.count * 2), 2));
+      geo.applyMatrix4(o.matrixWorld);
+      if (!buckets.has(key)) buckets.set(key, { mat: o.material, shadow: o.castShadow, geos: [] });
+      buckets.get(key).geos.push(geo); victims.push(o);
+    });
+    for (const o of victims) o.parent.remove(o);
+    this.merged = new THREE.Group(); this.g.add(this.merged);
+    for (const b of buckets.values()) {
+      const geo = mergeGeometries(b.geos, false);
+      if (!geo) continue;
+      const m = new THREE.Mesh(geo, b.mat); m.castShadow = b.shadow; m.receiveShadow = true;
+      this.merged.add(m);
+    }
+    this.mergeStats = { from: victims.length, to: this.merged.children.length };
   }
 
   // ── Геометрия трассы: точки, которые нельзя занимать и закрывать ─────────────────
@@ -567,6 +606,7 @@ export class Kitchen {
 
   // Листва, которая слегка покачивается (как от сквозняка)
   sway(obj, amp = 0.04, speed = 1) {
+    obj.userData.dynamic = true;   // двигается — не склеивать с неподвижными деталями
     const ph = Math.random() * 6, rx = obj.rotation.x, rz = obj.rotation.z;
     this.anim.push(t => { obj.rotation.x = rx + Math.sin(t * speed + ph) * amp; obj.rotation.z = rz + Math.cos(t * speed * 0.8 + ph) * amp; });
   }
@@ -601,6 +641,7 @@ export class Kitchen {
 
   cat(parent, x, z, color, curled) {
     const fur = mat(color, { roughness: 1 }), c = new THREE.Group(); c.position.set(x, 0, z); parent.add(c);
+    c.userData.dynamic = true;
     const body = new THREE.Mesh(new THREE.SphereGeometry(2.8, 16, 12), fur); body.scale.set(1.2, 0.6, 1); body.position.y = 2.2; body.castShadow = true; c.add(body);
     const head = new THREE.Mesh(new THREE.SphereGeometry(1.5, 14, 10), fur); head.position.set(2.8, 2.6, 1.1); c.add(head);
     for (const s of [-1, 1]) { const e = new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.1, 4), fur); e.position.set(3, 4, 1.1 + s * 0.8); c.add(e); }
@@ -640,7 +681,7 @@ Object.assign(Kitchen.prototype, {
     const bone = new THREE.Group(); bone.position.set(7.5, 0.4, 2.5); bone.rotation.y = 0.6; g.add(bone);
     this.cyl(0.3, 0.3, 2.4, M.white, 0, 0, 0, bone, 8).rotation.z = Math.PI / 2;
     for (const s of [-1, 1]) for (const t of [-1, 1]) { const b = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 6), M.white); b.position.set(s * 1.2, 0, t * 0.3); bone.add(b); }
-    const ph = Math.random() * 6;
+    const ph = Math.random() * 6; body.userData.dynamic = true;
     this.anim.push(t => { body.scale.y = 0.6 + Math.sin(t * 1.2 + ph) * 0.03; });
   },
 
@@ -752,6 +793,7 @@ Object.assign(Kitchen.prototype, {
     const toy = new THREE.Group(); toy.position.set(1.5, 9, 0); g.add(toy);
     this.cyl(0.04, 0.04, 2, M.white, 0, 0, 0, toy, 4);
     const ball = new THREE.Mesh(new THREE.SphereGeometry(0.5, 10, 8), mat('#ff6f91')); ball.position.y = -1.2; toy.add(ball);
+    toy.userData.dynamic = true;
     const ph = Math.random() * 6; this.anim.push(t => { toy.rotation.z = Math.sin(t * 2.2 + ph) * 0.35; });   // покачивается
     const mouse = new THREE.Group(); mouse.position.set(5, 0, 2); mouse.rotation.y = 2.4; g.add(mouse);
     const mb = new THREE.Mesh(new THREE.SphereGeometry(0.7, 10, 8), mat('#9a9aa2', { roughness: 1 })); mb.scale.set(1.5, 0.8, 1); mb.position.y = 0.55; mouse.add(mb);
@@ -764,6 +806,7 @@ Object.assign(Kitchen.prototype, {
     const kitten = this.cat(g, -2, 0, '#8a8f96', false); kitten.scale.setScalar(0.75);
     const yarn = new THREE.Mesh(new THREE.SphereGeometry(1.2, 14, 12), mat('#d9503f', { roughness: 1 })); yarn.position.set(3.5, 1.2, 1); yarn.castShadow = true; g.add(yarn);
     for (let k = 0; k < 3; k++) { const r = new THREE.Mesh(new THREE.TorusGeometry(1.22, 0.06, 4, 24), mat('#b8403a')); r.rotation.set(k, k * 1.3, 0); yarn.add(r); }
+    yarn.userData.dynamic = true;
     const thread = this.cyl(0.05, 0.05, 6, mat('#d9503f'), 6, 0.08, 2, g, 4); thread.rotation.set(Math.PI / 2, 0, 0.8);
     // Игра по кругу: припадает к полу и виляет задом → прыжок на клубок → клубок откатывается → котёнок отходит назад
     const P = 3.6, ph = Math.random() * P, sm = k => k * k * (3 - 2 * k), seg = (f, a, b) => Math.min(1, Math.max(0, (f - a) / (b - a)));
@@ -784,7 +827,7 @@ Object.assign(Kitchen.prototype, {
   // Кот, который гуляет по свободному полу: идёт к случайной точке, садится, оглядывается и идёт дальше
   wanderingCat(cx, cz, R) {
     const g = this.group(cx, cz);
-    (this.walkers || (this.walkers = [])).push(g);
+    (this.walkers || (this.walkers = [])).push(g); g.userData.dynamic = true;
     const fur = mat('#2b2a2c', { roughness: 1 }), white = mat('#f2efe8', { roughness: 1 });
     const body = new THREE.Mesh(new THREE.CapsuleGeometry(1.3, 3.2, 6, 12), fur); body.rotation.z = Math.PI / 2; body.position.y = 3; body.castShadow = true; g.add(body);
     const head = new THREE.Group(); head.position.set(2.9, 4, 0); g.add(head);

@@ -195,11 +195,15 @@ export class Track {
     const pm = new THREE.MeshStandardMaterial({ color: '#efe3e8', roughness: 0.6 });
     const lamp = new THREE.MeshBasicMaterial({ color: '#ffb36b' });
     const lg = new THREE.BoxGeometry(T * 1.7, 0.35, T * 1.7);
-    for (let i = 0; i < this.n; i += C.pillarEvery) for (const s of [1, -1]) {
-      const [x, , z] = this.edge(i, s > 0 ? Math.max(h, this.pitOff(i) + this.ph) + T / 2 : -(h + T / 2));
-      const p = new THREE.Mesh(geo, pm); p.position.set(x, H * 0.75, z); p.castShadow = true; this.group.add(p);
-      const l = new THREE.Mesh(lg, lamp); l.position.set(x, H * 1.35, z); this.group.add(l);
-    }
+    // все столбики — один «размноженный» объект (InstancedMesh): 2 вызова отрисовки вместо ~120
+    const spots = [];
+    for (let i = 0; i < this.n; i += C.pillarEvery) for (const s of [1, -1]) spots.push(this.edge(i, s > 0 ? Math.max(h, this.pitOff(i) + this.ph) + T / 2 : -(h + T / 2)));
+    const pillars = new THREE.InstancedMesh(geo, pm, spots.length), lamps = new THREE.InstancedMesh(lg, lamp, spots.length);
+    const m = new THREE.Matrix4();
+    spots.forEach(([x, , z], k) => { pillars.setMatrixAt(k, m.makeTranslation(x, H * 0.75, z)); lamps.setMatrixAt(k, m.makeTranslation(x, H * 1.35, z)); });
+    pillars.castShadow = true; pillars.receiveShadow = true;
+    pillars.computeBoundingSphere(); lamps.computeBoundingSphere();
+    this.group.add(pillars, lamps);
   }
 
   // Вертикальная стенка вдоль трассы на смещении off (материал двусторонний)
