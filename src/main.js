@@ -15,6 +15,7 @@ import { Kitchen } from './kitchen.js';
 import { Rival } from './rivals.js';
 import { collideRobots } from './collide.js';
 import { Pickups, WEAPONS } from './pickups.js';
+import { Combat } from './weapons.js';
 
 const world = new World(document.getElementById('game'));
 const track = new Track(world.scene);
@@ -23,6 +24,7 @@ const skids = new Skids(world.scene);
 const smoke = new Smoke(world.scene);
 const trash = new Trash(world.scene, track);
 const pickups = new Pickups(world.scene, track);
+const combat = new Combat(world.scene, track);
 hud.initMap(track);
 hud.clock(); setInterval(() => hud.clock(), 30000);
 
@@ -45,7 +47,7 @@ function startRace(id) {
     const r = new Rival(world.scene, ROBOTS[rid], track), [s, l] = slot(k < 2 ? k : k + 1);
     r.place(s, l); return r;
   });
-  trash.reset(); pickups.reset(); hud.weapon(null);
+  trash.reset(); pickups.reset(); combat.clear(); hud.weapon(null);
   st = { pitting: false, wasManual: false, lastWallSay: 0, lastDriftSay: 0, lastChargeSay: 0, warned: false, wasDrift: false };
   input.keys = {}; input.lastKeyTime = 0;
   skids.clear(); smoke.clear();
@@ -62,6 +64,13 @@ const menu = new Menu(startRace);
 menu.show(PLAYER_ROBOT);
 function toMenu() { clearBoom(); hud.hideOut(); mode = 'menu'; menu.show(bot.spec.id); }
 addEventListener('keydown', e => {
+  if (e.code === 'Space' && mode === 'race') {      // применить оружие
+    e.preventDefault();
+    const w = bot.weapon;
+    if (!w) return;
+    if (combat.fire(bot, performance.now() / 1000)) { hud.weapon(null); hud.say(P['fire_' + w], 1200); }
+    else hud.say(P.binEmpty, 1600);
+  }
   if (e.code === 'Escape' && (mode === 'race' || mode === 'out')) toMenu();
   else if (e.code === 'Enter' && mode === 'out' && boom?.t > 1) startRace(bot.spec.id);
 });
@@ -251,20 +260,41 @@ function updateRivals(t, dt) {
   pickups.update(t / 1000, dt, list, (who, w) => {
     if (who === bot) { hud.weapon(w); hud.say([WEAPONS[w].icon + ' ' + WEAPONS[w].name + '!'], 1400); }
   });
+  const now = t / 1000;
+  for (const r of rivals) if (!r.out) combat.think(r, list, now);
+  combat.update(now, dt, list, (who, dmg, by, kind) => damage(who, dmg, by, t, kind));
+}
+
+// Урон от оружия или удара: игроку — с репликами и полоской ХП, соперникам — через их hurt().
+// Если соперника подбил игрок — награда жетонами.
+function damage(who, dmg, by, t, kind) {
+  if (who.rival) {
+    if (dmg <= 0) return;
+    const wasOut = who.rival.out;
+    who.rival.hurt(dmg);
+    if (!wasOut && who.rival.out && by === bot) {
+      race.tokens += C.weapons.killReward; race.earned += C.weapons.killReward; race.kills = (race.kills || 0) + 1;
+      hud.say(P.kill, 1800);
+    }
+    return;
+  }
+  if (mode !== 'race') return;
+  if (kind === 'soap') { hud.say(P.slip, 1400); return; }
+  who.hp = Math.max(0, who.hp - dmg);
+  if (dmg > 3) who.dent(dmg);
+  who.scratch(); hud.hurt();
+  if (who.hp <= 0) explode(t);
+  else if (t - st.lastWallSay > 2000) { st.lastWallSay = t; hud.say(kind === 'trash' ? P.shot : P.bump, 1400); }
 }
 
 // Роботы толкаются; урон игроку — с репликами и полоской ХП, соперникам — через их hurt()
 function bumps(t) {
   const list = rivals.filter(r => !r.out).map(r => r.bot);
   if (mode === 'race') list.push(bot);
-  collideRobots(list, (who, dmg, nx, nz) => {
+  collideRobots(list, (who, dmg, nx, nz, other) => {
     who.hitN = [nx, nz];
-    if (who.rival) { who.rival.hurt(dmg); return; }
-    who.hp = Math.max(0, who.hp - dmg);
-    if (dmg > 3) who.dent(dmg);
-    who.scratch(); hud.hurt();
-    if (who.hp <= 0) explode(t);
-    else if (t - st.lastWallSay > 2000) { st.lastWallSay = t; hud.say(P.bump, 1400); }
+    if (combat.absorb(who, t / 1000)) return;        // губка-щит приняла удар
+    damage(who, dmg, other, t, 'bump');
   }, t / 1000);
 }
 

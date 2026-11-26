@@ -109,7 +109,8 @@ export class Robot {
     const s = this.s;
     const turnRate = Math.abs(da) / (dt || 1), fast = clamp((this.v - C.slideMinSpeed) / (s.maxSpeed - C.slideMinSpeed), 0, 1);
     const slide = clamp(turnRate / s.turn, 0, 1) * fast;
-    this.lat *= Math.exp(-(s.grip + (s.gripSlide - s.grip) * slide) * dt);
+    // gripMul < 1 — робот на скользком (лужа моющего средства, см. weapons.js)
+    this.lat *= Math.exp(-(s.grip + (s.gripSlide - s.grip) * slide) * (this.gripMul ?? 1) * dt);
     this.drifting = Math.abs(this.lat) > C.slideShowLat;   // для эффектов и реплик
 
     const fx = Math.cos(this.a), fz = Math.sin(this.a);
