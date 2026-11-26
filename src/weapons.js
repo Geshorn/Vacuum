@@ -290,17 +290,20 @@ export class Combat {
       o.bin -= take; o.binValue -= val; bot.bin += take; bot.binValue += val; stolen += take;
     }
     bot.stolen = stolen;
-    // кольца поля вокруг робота
-    const g = new THREE.Group(); bot.mesh.add(g);
-    for (let k = 0; k < 3; k++) {
-      const r = new THREE.Mesh(new THREE.TorusGeometry(1, 0.08, 6, 32), new THREE.MeshBasicMaterial({ color: k % 2 ? '#ff5b5b' : '#6fa8ff', transparent: true, opacity: 0.7, depthWrite: false }));
-      r.rotation.x = Math.PI / 2; r.position.y = 0.3; g.add(r);
+    this.showMagnet(bot, true);
+  }
+
+  // Кольца поля магнита: сходятся к роботу (видно, что тянет). Живут, пока действует магнит (см. update)
+  showMagnet(bot, on) {
+    if (on && !bot.magnetMesh) {
+      const g = new THREE.Group();
+      for (let k = 0; k < 3; k++) {
+        const r = new THREE.Mesh(new THREE.TorusGeometry(1, 0.1, 6, 40), new THREE.MeshBasicMaterial({ color: k % 2 ? '#ff5b5b' : '#6fa8ff', transparent: true, opacity: 0.7, depthWrite: false }));
+        r.rotation.x = Math.PI / 2; r.position.y = 0.3; g.add(r);
+      }
+      bot.mesh.add(g); bot.magnetMesh = g;
     }
-    this.extras.push({ mesh: new THREE.Group(), update: (now) => {
-      if (now > bot.magnetUntil || !bot.mesh.visible) { bot.mesh.remove(g); return false; }
-      g.children.forEach((r, k) => { const f = (now * 0.8 + k / 3) % 1; r.scale.setScalar(1 + f * P.radius * 0.9); r.material.opacity = 0.7 * (1 - f); });
-      return true;
-    } });
+    if (!on && bot.magnetMesh) { bot.mesh.remove(bot.magnetMesh); bot.magnetMesh = null; }
   }
 
   // Звёздочки над оглушённым роботом (после банана)
@@ -427,6 +430,22 @@ export class Combat {
     }
     this.pellets = this.pellets.filter(p => { if (p.life > 0) return true; this.group.remove(p.mesh); return false; });
 
+    // магнит: тянет соперников в радиусе к себе (сильнее вблизи, лёгких — сильнее); кольца сходятся к роботу
+    for (const m of bots) {
+      if (!(m.magnetUntil > now) || !m.mesh.visible) { if (m.magnetMesh) this.showMagnet(m, false); continue; }
+      const P = W().magnet;
+      for (const o of bots) {
+        if (o === m || !o.mesh.visible || o.inLane || this.absorb(o, now)) continue;
+        const dx = m.x - o.x, dz = m.z - o.z, d = Math.hypot(dx, dz);
+        if (d > P.pullRange || d < m.s.radius + o.s.radius + 0.5) continue;
+        this.push(o, dx / d, dz / d, P.pull * (1 - d / P.pullRange * 0.6) * dt);
+      }
+      if (m.magnetMesh) m.magnetMesh.children.forEach((r, k) => {
+        const f = (now * 0.9 + k / 3) % 1;
+        r.scale.setScalar(1 + (1 - f) * P.pullRange * 0.9); r.material.opacity = 0.75 * f;
+      });
+    }
+
     // турбо: держим скорость выше обычного максимума, пламя мерцает
     for (const b of bots) {
       if (b.boostUntil > now) {
@@ -452,7 +471,7 @@ export class Combat {
     let go = false;
     if (w === 'soap' || w === 'banana') go = others.some(o => o.dot < -0.3 && o.d < A.soapRange) || held > A.maxHold;
     if (w === 'trash') go = b.bin >= W().trash.cost && others.some(o => o.dot > 0.6 && o.d < A.shootRange);
-    if (w === 'magnet') go = b.bin < 80 && (others.some(o => o.d < W().magnet.stealRange) || held > A.react + 1);
+    if (w === 'magnet') go = others.some(o => o.d < W().magnet.pullRange) || (b.bin < 80 && held > A.react + 1);
     if (w === 'turbo') go = (rival.ram != null && !b.inLane) || (held > A.maxHold && !b.inLane);
     if (w === 'rocket') go = others.some(o => o.dot > 0.2 && o.d < 90) || held > A.maxHold;
     if (w === 'cap') go = others.some(o => o.dot > 0.7 && o.d < 55) || held > A.maxHold;
