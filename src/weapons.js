@@ -36,6 +36,46 @@ export class Combat {
     return null;
   }
 
+  // 💨 Пылевая ракета: комок пыли летит над бортиками к ближайшему сопернику впереди (самонаводится)
+  // и при попадании облепляет его пылью — «ослепление» на blind секунд
+  shootRocket(bot, now, bots) {
+    const P = W().rocket, fx = Math.cos(bot.a), fz = Math.sin(bot.a);
+    // цель: ближайший впереди в широком конусе, иначе просто ближайший
+    let tg = null, bd = Infinity, any = null, ad = Infinity;
+    for (const o of bots) {
+      if (o === bot || !o.mesh.visible) continue;
+      const dx = o.x - bot.x, dz = o.z - bot.z, d = Math.hypot(dx, dz);
+      if (d < ad) { ad = d; any = o; }
+      if ((dx * fx + dz * fz) / d > 0.2 && d < bd) { bd = d; tg = o; }
+    }
+    tg = tg || any;
+    const m = new THREE.Group(); this.group.add(m);
+    const mat = new THREE.MeshStandardMaterial({ color: '#9a96a2', roughness: 1, transparent: true, opacity: 0.9 });
+    for (let k = 0; k < 4; k++) { const s = new THREE.Mesh(new THREE.SphereGeometry(rnd(0.5, 0.8), 10, 8), mat); s.position.set(rnd(-0.4, 0.4), rnd(-0.3, 0.3), rnd(-0.4, 0.4)); m.add(s); }
+    const trail = [];
+    for (let k = 0; k < 8; k++) { const s = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 6), new THREE.MeshBasicMaterial({ color: '#c9c5d0', transparent: true, opacity: 0, depthWrite: false })); this.group.add(s); trail.push(s); }
+    const st = { x: bot.x + fx * (bot.s.radius + 1), z: bot.z + fz * (bot.s.radius + 1), a: bot.a, until: now + P.life, k: 0 };
+    const cleanup = () => trail.forEach(s => this.group.remove(s));
+    this.extras.push({ mesh: m, update: (now, dt, bots, onHit) => {
+      if (now > st.until || (tg && !tg.mesh.visible && !(tg = null))) { cleanup(); return false; }
+      if (tg) {                                      // доворот к цели
+        const want = Math.atan2(tg.z - st.z, tg.x - st.x);
+        let da = Math.atan2(Math.sin(want - st.a), Math.cos(want - st.a));
+        st.a += Math.max(-P.turn * dt, Math.min(P.turn * dt, da));
+      }
+      st.x += Math.cos(st.a) * P.speed * dt; st.z += Math.sin(st.a) * P.speed * dt;
+      m.position.set(st.x, 3, st.z); m.rotation.y += dt * 6; m.rotation.x += dt * 4;
+      // шлейф пыли
+      const s = trail[st.k++ % trail.length]; s.position.copy(m.position); s.material.opacity = 0.6; s.scale.setScalar(1);
+      for (const t of trail) { t.material.opacity = Math.max(0, t.material.opacity - dt * 1.5); t.scale.multiplyScalar(1 + dt * 1.5); }
+      const b = this.touching(st.x, st.z, 1.2, bots, bot);
+      if (!b) return true;
+      cleanup();
+      if (!this.absorb(b, now)) { b.blindUntil = now + P.blind; b.v *= P.slow; b.hitN = [-Math.cos(st.a), -Math.sin(st.a)]; onHit(b, P.damage, bot, 'rocket'); }
+      return false;
+    } });
+  }
+
   // 🍾 Пробка: летит вперёд и отскакивает от бортиков, как бильярдный шар (до bounces раз)
   shootCap(bot, now) {
     const P = W().cap, fx = Math.cos(bot.a), fz = Math.sin(bot.a), tr = this.track;
@@ -90,7 +130,7 @@ export class Combat {
   }
 
   // Применить оружие из слота. Возвращает false, если не получилось (например, пустой контейнер для залпа).
-  fire(bot, now) {
+  fire(bot, now, bots = this.lastBots || []) {
     const w = bot.weapon; if (!w) return false;
     const fx = Math.cos(bot.a), fz = Math.sin(bot.a);
     if (w === 'soap') {
@@ -105,6 +145,8 @@ export class Combat {
       const n = Math.round(T.time * T.rate);
       for (let k = 0; k < n; k++) this.queue.push({ bot, at: now + k / T.rate });
       bot.firingUntil = now + T.time;
+    } else if (w === 'rocket') {
+      this.shootRocket(bot, now, bots);
     } else if (w === 'cap') {
       this.shootCap(bot, now);
     } else if (w === 'banana') {
@@ -165,6 +207,7 @@ export class Combat {
 
   // onHit(target, dmg, attacker) — нанести урон (main решает, игрок это или соперник)
   update(now, dt, bots, onHit) {
+    this.lastBots = bots;
     // очередь выстрелов залпа
     this.queue = this.queue.filter(q => { if (now < q.at) return true; if (q.bot.mesh.visible) this.shoot(q.bot); return false; });
 
@@ -245,6 +288,7 @@ export class Combat {
     let go = false;
     if (w === 'soap' || w === 'banana') go = others.some(o => o.dot < -0.3 && o.d < A.soapRange) || held > A.maxHold;
     if (w === 'trash') go = b.bin >= W().trash.cost && others.some(o => o.dot > 0.6 && o.d < A.shootRange);
+    if (w === 'rocket') go = others.some(o => o.dot > 0.2 && o.d < 90) || held > A.maxHold;
     if (w === 'cap') go = others.some(o => o.dot > 0.7 && o.d < 55) || held > A.maxHold;
     if (w === 'sponge') go = b.hp < b.s.hp * 0.8 || others.some(o => o.d < 14) || held > A.maxHold;
     if (go && held > A.react && this.fire(b, now)) { rival.gotAt = 0; return; }

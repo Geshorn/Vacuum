@@ -10,6 +10,7 @@ export const WEAPONS = {
   sponge: { name: 'Губка-щит',       icon: '🧽' },
   banana: { name: 'Банановая кожура', icon: '🍌' },
   cap:    { name: 'Пробка',          icon: '🍾' },
+  rocket: { name: 'Пылевая ракета',  icon: '💨' },
 };
 
 function boxTexture() {

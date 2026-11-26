@@ -47,7 +47,7 @@ function startRace(id) {
     const r = new Rival(world.scene, ROBOTS[rid], track), [s, l] = slot(k < 2 ? k : k + 1);
     r.place(s, l); return r;
   });
-  trash.reset(); pickups.reset(); combat.clear(); hud.weapon(null);
+  trash.reset(); pickups.reset(); combat.clear(); hud.weapon(null); hud.blind(false);
   st = { pitting: false, wasManual: false, lastWallSay: 0, lastDriftSay: 0, lastChargeSay: 0, warned: false, wasDrift: false };
   input.keys = {}; input.lastKeyTime = 0;
   skids.clear(); smoke.clear();
@@ -247,6 +247,7 @@ function update(t, dt) {
   hud.bin(bot.bin, unloading);
   hud.tokens(race.tokens);
   hud.place(...placeOf());
+  hud.blind(bot.blindUntil > t / 1000);
 }
 
 // Место игрока в гонке: сколько ещё в гонке и сколько из них проехали больше
@@ -300,6 +301,7 @@ function damage(who, dmg, by, t, kind) {
   if (mode !== 'race') return;
   if (kind === 'soap') { hud.say(P.slip, 1400); return; }
   if (kind === 'banana') { hud.say(P.banana, 1400); return; }
+  if (kind === 'rocket') hud.say(P.rocket, 1600);
   who.hp = Math.max(0, who.hp - dmg);
   if (dmg > 3) who.dent(dmg);
   who.scratch(); hud.hurt();

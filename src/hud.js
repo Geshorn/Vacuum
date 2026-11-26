@@ -24,6 +24,8 @@ export const hud = {
     $('w-icon').textContent = WEAPONS[w].icon; $('w-name').textContent = WEAPONS[w].name; el.classList.add('on');
   },
 
+  blind(on) { $('blind').classList.toggle('on', on); },
+
   place(p, total) { $('place').textContent = p + '/' + total; },
 
   drawMap(robot, rivals = []) {
