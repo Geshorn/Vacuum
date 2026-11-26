@@ -29,7 +29,7 @@ hud.initMap(track);
 hud.clock(); setInterval(() => hud.clock(), 30000);
 
 let bot = null, race = null, st = null, mode = 'menu', rivals = [];
-window.__game = { track, skids, trash, world, kitchen };   // для отладки из консоли
+window.__game = { track, skids, trash, world, kitchen, combat };   // для отладки из консоли
 
 // Гонка с выбранным роботом: старт чуть позади линии, носом по ходу трассы
 function startRace(id) {

@@ -87,6 +87,20 @@ export class Combat {
     m.position.set(st.x, 0.8, st.z);
     this.extras.push({ mesh: m, update: (now, dt, bots, onHit) => {
       if (now > st.until) return false;
+      // лёгкая доводка на ближайшего робота перед пробкой (кроме стрелявшего)
+      const sp0 = Math.hypot(st.vx, st.vz);
+      let tg = null, td = 35;
+      for (const o of bots) {
+        if (o === bot || !o.mesh.visible) continue;
+        const dx = o.x - st.x, dz = o.z - st.z, d = Math.hypot(dx, dz);
+        if (d < td && (dx * st.vx + dz * st.vz) / (d * sp0) > 0.6) { td = d; tg = o; }
+      }
+      if (tg) {
+        const cur = Math.atan2(st.vz, st.vx), want = Math.atan2(tg.z - st.z, tg.x - st.x);
+        let da = Math.atan2(Math.sin(want - cur), Math.cos(want - cur));
+        da = Math.max(-P.homing * dt, Math.min(P.homing * dt, da));
+        st.vx = Math.cos(cur + da) * sp0; st.vz = Math.sin(cur + da) * sp0;
+      }
       st.x += st.vx * dt; st.z += st.vz * dt;
       st.seg = tr.nearest(st.x, st.z, st.seg);
       const lat = tr.lateral(st.seg, st.x, st.z), [lo, hi] = tr.bounds(st.seg, lat, 0.8);
@@ -101,7 +115,13 @@ export class Combat {
       const b = this.touching(st.x, st.z, 0.8, bots, now < st.until - P.life + 0.25 ? bot : null);
       if (!b) return true;
       if (!this.absorb(b, now)) {
-        const sp = Math.hypot(st.vx, st.vz); b.hitN = [-st.vx / sp, -st.vz / sp]; b.v *= P.slow;
+        // толчок по направлению полёта пробки (как удар бильярдного шара); лёгкий робот улетает дальше
+        const sp = Math.hypot(st.vx, st.vz), nx = st.vx / sp, nz = st.vz / sp;
+        b.hitN = [-nx, -nz];
+        const push = P.push / Math.sqrt(b.s.mass), c = Math.cos(b.a), s = Math.sin(b.a);
+        const wx = c * b.v - s * b.lat + nx * push, wz = s * b.v + c * b.lat + nz * push;
+        b.v = wx * c + wz * s; b.lat = -wx * s + wz * c;
+        b.slipUntil = now + 0.4; b.spin = (Math.random() < 0.5 ? -1 : 1) * 3;   // ненадолго теряет сцепление и закручивается
         onHit(b, P.damage, bot, 'cap');
       }
       return false;
