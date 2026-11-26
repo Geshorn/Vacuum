@@ -147,7 +147,8 @@ function update(t, dt) {
   }
   if (hit > 6) bot.bat =Math.max(0, bot.bat - C.drain.wall * bot.s.drainMul);
   // Урон корпусу: растёт с силой удара и массой робота; лёгкие касания стены не вредят
-  const dmg = bot.dead ? 0 : Math.max(0, hit - C.damage.threshold) * C.damage.k * bot.s.mass;
+  const shielded = combat.absorb(bot, t / 1000);   // губка-щит: от стен тоже защищает
+  const dmg = bot.dead || shielded ? 0 : Math.max(0, hit - C.damage.threshold) * C.damage.k * bot.s.mass;
   if (dmg > 0) {
     bot.hp = Math.max(0, bot.hp - dmg);
     if (dmg > 3) bot.dent(dmg);
@@ -188,7 +189,7 @@ function update(t, dt) {
     }
     bot.bin = Math.min(100, bot.bin + K.fill); bot.binValue += K.value; race.collected++;
     if (kind === 'coin' && t - (st.lastCoinSay || 0) > 4000) { st.lastCoinSay = t; hud.say(P.coin, 1200); }
-    if (K.damage) {
+    if (K.damage && !combat.absorb(bot, t / 1000)) {
       bot.hp = Math.max(0, bot.hp - K.damage);
       const q = Math.random() * Math.PI * 2; bot.hitN = [Math.cos(q), Math.sin(q)]; bot.scratch();
       hud.hurt();

@@ -59,7 +59,7 @@ export const C = {
   weapons: {
     soap:   { radius: 3.2, life: 14, slipTime: 1.4, spin: 5, damage: 0 },        // лужа: радиус, сколько живёт, сколько скользишь, закрутка
     trash:  { shots: 6, binPerShot: 5, interval: 0.09, speed: 55, life: 1.2, damage: 6, slow: 0.55 },   // залп: до 6 комков по 5% контейнера
-    sponge: { time: 7 },                                                          // щит держится до 7 с или до первого удара
+    sponge: { time: 7 },                                                          // щит: 7 с защиты от любого урона
     killReward: 15,                                                               // жетонов игроку за подбитого соперника
   },
 

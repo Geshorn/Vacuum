@@ -93,7 +93,7 @@ export class Rival {
 
   hurt(dmg) {
     const b = this.bot;
-    if (this.out) return;
+    if (this.out || b.shieldUntil > performance.now() / 1000) return;   // губка-щит: любой урон мимо
     b.hp = Math.max(0, b.hp - dmg);
     if (dmg > 3) b.dent(dmg);
     b.scratch();

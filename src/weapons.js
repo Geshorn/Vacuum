@@ -4,7 +4,7 @@ import { C } from './config.js';
 /* Оружие роботов.
    🧴 Моющее средство — лужа пены позади робота: кто наедет, того закручивает и почти лишает сцепления.
    🗑️ Залп мусором — очередь комков мусора вперёд из своего контейнера (тратит содержимое): урон и потеря скорости.
-   🧽 Губка-щит — на несколько секунд поглощает один удар: выстрел, лужу или столкновение.
+   🧽 Губка-щит — на несколько секунд защищает от любого урона: выстрелов, луж, столкновений и стен.
    Соперники применяют оружие сами (think). */
 const W = () => C.weapons;
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -42,12 +42,8 @@ export class Combat {
     return true;
   }
 
-  // Губка поглощает удар: true — урона не будет
-  absorb(bot, now) {
-    if (!(bot.shieldUntil > now)) return false;
-    bot.shieldUntil = 0; this.showShield(bot, false);
-    return true;
-  }
+  // Губка защищает от любого урона всё время действия: true — урона не будет
+  absorb(bot, now) { return bot.shieldUntil > now; }
 
   addPuddle(x, z, owner, now) {
     const R = W().soap.radius;
