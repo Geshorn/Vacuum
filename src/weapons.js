@@ -146,7 +146,7 @@ export class Combat {
     const rim = new THREE.Mesh(new THREE.TorusGeometry(0.75, 0.1, 6, 18), new THREE.MeshStandardMaterial({ color: '#f2efe8', metalness: 0.6 })); rim.rotation.x = Math.PI / 2; m.add(rim);
     const st = { x: bot.x + fx * (bot.s.radius + 1), z: bot.z + fz * (bot.s.radius + 1), vx: fx * (P.speed + Math.max(0, bot.v)), vz: fz * (P.speed + Math.max(0, bot.v)), seg: bot.seg, bounces: 0, until: now + P.life };
     m.position.set(st.x, 0.8, st.z);
-    this.extras.push({ mesh: m, update: (now, dt, bots, onHit) => {
+    this.extras.push({ mesh: m, missile: st, owner: bot, update: (now, dt, bots, onHit) => {
       if (now > st.until) return false;
       // лёгкая доводка на ближайшего робота перед пробкой (кроме стрелявшего)
       const sp0 = Math.hypot(st.vx, st.vz);
@@ -201,7 +201,7 @@ export class Combat {
     }
     const t = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.8, 8), tip); t.position.y = 0.4; m.add(t);
     const born = now, until = now + W().banana.life;
-    this.extras.push({ mesh: m, update: (now, dt, bots, onHit) => {
+    this.extras.push({ mesh: m, hazard: { x, z, r: 1.4 }, update: (now, dt, bots, onHit) => {
       if (now > until) return false;
       const b = this.touching(x, z, 0.9, bots, now - born < 1 ? bot : null);
       if (!b) return true;
@@ -460,6 +460,46 @@ export class Combat {
     if (go && held > A.react && this.fire(b, now)) { rival.gotAt = 0; return; }
     // оружие, которым никак не воспользоваться (залп без мусора), выбрасываем — чтобы взять новое из коробок
     if (held > A.maxHold + 2) { b.weapon = null; rival.gotAt = 0; }
+  }
+
+  // Уклонение: лужа или кожура на пути впереди — объехать с той стороны, где больше места;
+  // пробка летит прямо на бота — уйти вбок. Замечает помеху не всегда (C.rivals.dodge.notice).
+  // Возвращает смещение от центра трассы, к которому рулить, или null.
+  dodgeLane(rival, now) {
+    const b = rival.bot, D = C.rivals.dodge, tr = this.track;
+    if (b.inLane) return null;
+    const fx = Math.cos(b.a), fz = Math.sin(b.a), seen = rival.seen || (rival.seen = new WeakMap());
+    const notices = key => { if (!seen.has(key)) seen.set(key, Math.random() < D.notice); return seen.get(key); };
+    // летящие пробки: если приближается и пройдёт рядом — шаг в сторону
+    for (const e of this.extras) {
+      const s = e.missile; if (!s || e.owner === b || !notices(e)) continue;
+      const dx = b.x - s.x, dz = b.z - s.z, d = Math.hypot(dx, dz), sp = Math.hypot(s.vx, s.vz) || 1;
+      if (d > D.missileRange || (dx * s.vx + dz * s.vz) / (d * sp) < 0.8) continue;
+      // уходим дальше от линии полёта: в ту сторону, с которой бот уже от неё
+      const px = -s.vz / sp, pz = s.vx / sp, side = dx * px + dz * pz > 0 ? 1 : -1;
+      const n = tr.nrm[b.seg], toLat = Math.sign((px * n.x + pz * n.z) * side) || 1;
+      return tr.lateral(b.seg, b.x, b.z) + toLat * D.step;
+    }
+    // лужи и кожура впереди на пути — считаем вдоль трассы (на поворотах «прямо по курсу» не годится):
+    // помеха в пределах lookAhead по трассе и на той же полосе, что и бот
+    const cur = tr.lateral(b.seg, b.x, b.z), step = C.sampleStep;
+    let best = null, bestAhead = D.lookAhead;
+    const hz = [...this.puddles.map(p => ({ key: p, x: p.x, z: p.z, r: W().soap.radius })), ...this.extras.filter(e => e.hazard).map(e => ({ key: e, ...e.hazard }))];
+    for (const h of hz) {
+      if ((h.x - b.x) ** 2 + (h.z - b.z) ** 2 > (D.lookAhead + 10) ** 2) continue;
+      const hs = tr.nearest(h.x, h.z, b.seg), ahead = ((hs - b.seg + tr.n) % tr.n) * step;
+      if (ahead > bestAhead) continue;
+      h.lat = tr.lateral(hs, h.x, h.z);
+      if (Math.abs(h.lat - cur) > h.r + b.s.radius + D.margin || !notices(h.key)) continue;
+      best = h; bestAhead = ahead;
+    }
+    if (!best) return null;
+    const hl = best.lat, clear = best.r + b.s.radius + D.margin;
+    const left = hl + clear, right = hl - clear, lim = tr.half - b.s.radius - 0.5;
+    // объезжаем с той стороны, где хватает места (если обе — ближайшей к текущей полосе)
+    const okL = left < lim, okR = right > -lim;
+    if (okL && okR) return Math.abs(left - cur) < Math.abs(right - cur) ? left : right;
+    return okL ? left : okR ? right : null;
   }
 
   // Таран: ближайший соперник прямо впереди и близко — бот смещается на его полосу.

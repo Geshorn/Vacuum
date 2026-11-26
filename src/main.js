@@ -274,7 +274,10 @@ function updateRivals(t, dt) {
   // соперники: применяют оружие, таранят того, кто впереди, а с пустым слотом рулят к ближайшей коробке
   for (const r of rivals) if (!r.out) {
     combat.think(r, list, now);
-    r.ram = r.bot.weapon ? combat.ramLane(r, list) : boxLane(r);
+    // уклонение от помех важнее тарана и поездки за коробкой
+    const dodge = combat.dodgeLane(r, now);
+    r.dodging = dodge != null;                       // при объезде чуть сбрасывает газ, а не прибавляет, как на таран
+    r.ram = dodge ?? (r.bot.weapon ? combat.ramLane(r, list) : boxLane(r));
   }
   combat.update(now, dt, list, (who, dmg, by, kind) => damage(who, dmg, by, t, kind));
 }

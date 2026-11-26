@@ -49,7 +49,7 @@ export class Rival {
       const blind = b.blindUntil > t;                 // ослеплён пылевой ракетой: виляет и сбрасывает газ
       if (blind) lane += Math.sin(t * 6) * 4;
       // на таран чуть прибавляет газу, чтобы догнать
-      b.auto(tr, dt, usePit ? i => tr.pitOff(i) : () => lane, this.speedMul * (this.ram != null ? 1.12 : 1) * (blind ? 0.75 : 1));
+      b.auto(tr, dt, usePit ? i => tr.pitOff(i) : () => lane, this.speedMul * (this.dodging ? C.rivals.dodge.slow : this.ram != null ? 1.12 : 1) * (blind ? 0.75 : 1));
       if (usePit && !b.inLane) {
         const toEntry = ((tr.pitStart - b.seg + tr.n) % tr.n) * C.sampleStep;
         if (k >= 0 || toEntry < 30) b.v = Math.min(b.v, C.pit.speedLimit + 4 + Math.max(0, toEntry) * 0.3);
