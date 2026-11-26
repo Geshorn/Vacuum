@@ -60,21 +60,35 @@ function update(t, dt) {
   if (bot.dead) {
     bot.v *= Math.exp(-3 * dt); bot.drifting = false;
     if (t > bot.deadUntil) { bot.dead = false; bot.bat = Math.max(bot.bat, C.battEmergency); hud.say(P.batRevive, 2400); }
-  } else if (manual) { bot.manual(input.keys, dt); st.pitting = false; }
+  } else if (manual) { bot.manual(input.keys, dt); st.pitting = st.pitCommit = false; }
   else {
-    bot.auto(track, dt);
-    // Автопилот заезжает на пит-стоп только при низком заряде: тормозит к площадке и стоит до полной зарядки
+    // Автопилот заезжает на пит-стоп только при низком заряде: сворачивает в пит-лейн, тормозит у станции
+    // и стоит до полной зарядки. Если решение пришло, когда съезд уже проехан, — заедет на следующем круге.
     if (!st.pitting && bot.bat < Math.min(80, C.autoPitBelow * bot.s.drainMul)) st.pitting = true;
-    if (st.pitting) {
-      const mid = Math.round((track.padFrom + track.padTo) / 2);
-      const ahead = (mid - bot.seg + track.n) % track.n * C.sampleStep;   // расстояние до центра площадки
+    const k = track.pitK(bot.seg);
+    // решение «еду в боксы» принимается до середины съезда и дальше не меняется
+    if (k < 0 || k < track.pitRamp * 0.4) st.pitCommit = st.pitting;
+    const usePit = bot.inLane || st.pitCommit;
+    bot.auto(track, dt, usePit ? i => track.pitOff(i) : null);
+    // перед съездом сбрасываем скорость, чтобы аккуратно вписаться
+    if (usePit && !bot.inLane) {
+      const toEntry = ((track.pitStart - bot.seg + track.n) % track.n) * C.sampleStep;
+      if (k >= 0 || toEntry < 30) bot.v = Math.min(bot.v, C.pit.speedLimit + 4 + Math.max(0, toEntry) * 0.3);
+    }
+    if (st.pitting && bot.inLane) {
+      const ahead = (track.padMid - bot.seg + track.n) % track.n * C.sampleStep;   // расстояние до центра площадки
       if (bot.onPad) bot.v = Math.max(0, bot.v - bot.s.brake * dt);
       else if (ahead < 40) bot.v = Math.min(bot.v, 3 + ahead * 0.45);
       if (bot.bat >= 100) st.pitting = false;
     }
   }
 
+  // Ограничитель скорости в пит-лейне: плавно тормозит до лимита
+  if (bot.inLane && bot.v > C.pit.speedLimit) bot.v = Math.max(C.pit.speedLimit, bot.v - bot.s.brake * dt);
+
   const hit = bot.integrate(track, a0, dt);
+  if (bot.inLane && !st.wasLane) hud.say(P.pitIn, 1600);
+  st.wasLane = bot.inLane;
   if (hit > 6) {
     bot.bat = Math.max(0, bot.bat - C.drain.wall * bot.s.drainMul);
     if (t - st.lastWallSay > 2500) { st.lastWallSay = t; hud.say(P.wall); }
@@ -84,7 +98,7 @@ function update(t, dt) {
 
   // Круги: пересечение старта вперёд
   const seg = bot.seg, n = track.n;
-  bot.onPad = track.onPad(seg) && Math.abs(track.lateral(seg, bot.x, bot.z)) < track.half * 0.45;
+  bot.onPad = track.onPad(seg, track.lateral(seg, bot.x, bot.z));
   if (race.lastSeg > n * 0.8 && seg < n * 0.2) {
     if (race.started) {
       const lapMs = t - race.lapStart;
@@ -109,6 +123,7 @@ function update(t, dt) {
   if (bot.bat < 20 && !st.warned) { st.warned = true; hud.say(P.batWarn, 2400); }
   if (bot.bat <= 0 && !bot.dead) { bot.dead = true; bot.deadUntil = t + C.deadMs; hud.say(P.batDead, 3000); }
   hud.battery(bot.bat, charging);
+  track.update(t, charging);
   hud.speed(spd);
   hud.health(bot.hp, bot.s.hp);
 }

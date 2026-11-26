@@ -52,10 +52,13 @@ export class Robot {
   }
 
   // Автопилот: едет к точке впереди по центру трассы, на крутых поворотах сбрасывает скорость
-  auto(track, dt) {
-    const look = Math.round(6 + this.speed() * 0.45);
-    const p = track.p[track.at(this.seg + look)];
-    const diff = wrap(Math.atan2(p.z - this.z, p.x - this.x) - this.a);
+  // offFn(i) — смещение линии, по которой ехать (например, в пит-лейн); без него — по центру
+  auto(track, dt, offFn = null) {
+    // в пит-лейн смотрим ближе вперёд, чтобы не срезать угол на съезде
+    const look = Math.round(offFn ? 4 + this.speed() * 0.2 : 6 + this.speed() * 0.45);
+    const i = track.at(this.seg + look);
+    const [px, , pz] = track.edge(i, offFn ? offFn(i) : 0);
+    const diff = wrap(Math.atan2(pz - this.z, px - this.x) - this.a);
     this.a += clamp(diff, -C.autoTurn * dt, C.autoTurn * dt);
     this.w = 0;
     const want = C.autoSpeed * this.s.maxSpeed * (Math.abs(diff) > 0.5 ? 0.6 : 1);
@@ -89,15 +92,15 @@ export class Robot {
     this.x += (fx * this.v - fz * this.lat) * dt;
     this.z += (fz * this.v + fx * this.lat) * dt;
 
-    // стены: держим робота в пределах ширины дороги
+    // стены: держим робота в пределах дороги или пит-лейна (границы даёт трасса)
     this.seg = track.nearest(this.x, this.z, this.seg);
-    const d = track.lateral(this.seg, this.x, this.z), lim = track.half - s.radius;
+    const d = track.lateral(this.seg, this.x, this.z);
+    const [lo, hi, lane] = track.bounds(this.seg, d, s.radius);
+    this.inLane = lane; this.latPos = d;
+    const m = track.nrm[this.seg];
     let hit = 0;
-    if (Math.abs(d) > lim) {
-      const m = track.nrm[this.seg], s = Math.sign(d);
-      this.x -= m.x * s * (Math.abs(d) - lim); this.z -= m.z * s * (Math.abs(d) - lim);
-      hit = this.bounce(-m.x * s, -m.z * s, this.s.restitution);
-    }
+    if (d > hi) { this.x -= m.x * (d - hi); this.z -= m.z * (d - hi); hit = this.bounce(-m.x, -m.z, s.restitution); }
+    else if (d < lo) { this.x += m.x * (lo - d); this.z += m.z * (lo - d); hit = this.bounce(m.x, m.z, s.restitution); }
     return hit;
   }
 

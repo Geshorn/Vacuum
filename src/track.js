@@ -21,7 +21,106 @@ export class Track {
     }
     this.group = new THREE.Group();
     scene.add(this.group);
-    this.buildRoad(); this.buildCurbs(); this.buildWalls(); this.buildStart();
+    this.setupPit();
+    this.buildRoad(); this.buildCurbs(); this.buildWalls(); this.buildStart(); this.buildPit();
+  }
+
+  // --- Пит-лейн ---------------------------------------------------------------
+  // Пит-лейн идёт по левой (+нормаль) стороне трассы. Его центр смещён от центра дороги на pitOff(i):
+  // на съезде плавно растёт от 0, дальше постоянный, на выезде плавно уходит в 0.
+  setupPit() {
+    const P = C.pit;
+    this.pitStart = this.at(P.start); this.pitLen = P.length; this.pitRamp = P.ramp;
+    this.ph = P.laneWidth / 2;
+    this.pitFull = this.half + C.wallThick + this.ph;      // между дорогой и пит-лейном — стенка толщиной wallThick
+    const segs = Math.round(P.padLength / C.sampleStep);
+    this.padK0 = Math.round((P.length - segs) / 2); this.padK1 = this.padK0 + segs;
+    this.padFrom = this.at(this.pitStart + this.padK0); this.padTo = this.at(this.pitStart + this.padK1);
+    this.padMid = this.at(this.pitStart + Math.round((this.padK0 + this.padK1) / 2));
+  }
+
+  // Номер сегмента внутри пит-лейна (0..pitLen) или -1, если сегмент вне его
+  pitK(i) { const k = (i - this.pitStart + this.n) % this.n; return k <= this.pitLen ? k : -1; }
+
+  pitOff(i) {
+    const k = this.pitK(i); if (k < 0) return 0;
+    const r = this.pitRamp, u = k < r ? k / r : k > this.pitLen - r ? (this.pitLen - k) / r : 1;
+    return u * u * (3 - 2 * u) * this.pitFull;
+  }
+
+  // Толщина стенки между дорогой и пит-лейном в сегменте i (0 — стенки нет, проезд открыт)
+  sepGap(i) { const D = this.pitOff(i); return D > 0 ? D - this.ph - this.half : -1; }
+
+  // Допустимое смещение центра робота радиуса r от центра трассы: [от, до, в пит-лейне ли]
+  bounds(i, d, r) {
+    const h = this.half, D = this.pitOff(i);
+    if (D <= 0) return [-h + r, h - r, false];
+    const gap = this.sepGap(i);
+    if (gap < 0.3) return [-h + r, Math.max(h, D + this.ph) - r, d > h];      // съезд/выезд: дорога и пит-лейн слиты
+    if (d > h + gap / 2) return [D - this.ph + r, D + this.ph - r, true];       // за разделительной стенкой
+    return [-h + r, h - r, false];
+  }
+
+  onPad(i, d) { const k = this.pitK(i); return k >= this.padK0 && k <= this.padK1 && Math.abs(d - this.pitFull) < this.ph * 0.8; }
+
+  // Полоса на участке i0..i0+cnt; смещения fa/fb — числа или функции от сегмента
+  band(i0, cnt, fa, fb, ya, yb, mat) {
+    const F = f => (typeof f === 'function' ? f : () => f);
+    const A = F(fa), B = F(fb), pos = [], idx = [];
+    for (let k = 0; k <= cnt; k++) { const i = this.at(i0 + k); pos.push(...this.edge(i, A(i), ya), ...this.edge(i, B(i), yb)); }
+    for (let k = 0; k < cnt; k++) { const b = k * 2; idx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2); }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setIndex(idx); g.computeVertexNormals();
+    const m = new THREE.Mesh(g, mat); m.receiveShadow = true;
+    this.group.add(m);
+    return m;
+  }
+
+  // Стена на участке: две вертикальные грани по смещениям fin и fout и крышка сверху
+  wallRange(i0, cnt, fin, fout, side, top) {
+    const H = C.wallHeight;
+    for (const f of [fin, fout]) { const m = this.band(i0, cnt, f, f, 0, H, side); m.castShadow = true; }
+    this.band(i0, cnt, fout, fin, H, H, top);
+  }
+
+  buildPit() {
+    const h = this.half, ph = this.ph, s0 = this.pitStart, L = this.pitLen;
+    const outer = i => Math.max(h, this.pitOff(i) + ph);
+    // покрытие пит-лейна
+    this.band(s0, L, outer, h, 0.021, 0.021, new THREE.MeshStandardMaterial({ color: '#3a2e3c', roughness: 0.9 }));
+    // белые линии ограничителя скорости в начале и конце прямого участка
+    const lineMat = new THREE.MeshBasicMaterial({ color: '#f4eef2' });
+    for (const k of [this.pitRamp, L - this.pitRamp - 1]) this.band(s0 + k, 1, this.pitFull - ph, this.pitFull + ph, 0.035, 0.035, lineMat);
+    // жёлтая разметка вдоль разделительной стенки
+    const yel = new THREE.MeshBasicMaterial({ color: '#ffcc33' });
+    this.band(s0 + this.pitRamp, L - this.pitRamp * 2, this.pitFull - ph + 0.35, this.pitFull - ph + 0.6, 0.03, 0.03, yel);
+
+    // зарядная площадка
+    this.padMat = new THREE.MeshBasicMaterial({ color: '#4cd964', transparent: true, opacity: 0.4, side: THREE.DoubleSide });
+    this.band(this.padFrom, this.padK1 - this.padK0, this.pitFull - ph * 0.8, this.pitFull + ph * 0.8, 0.04, 0.04, this.padMat);
+
+    // зарядная станция у внешней стенки
+    const st = new THREE.Group();
+    const body = new THREE.MeshStandardMaterial({ color: '#e9e2e6', roughness: 0.5 });
+    this.chargerMat = new THREE.MeshStandardMaterial({ color: '#1d4d27', emissive: '#4cd964', emissiveIntensity: 0.6 });
+    const add = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; st.add(m); return m; };
+    add(new THREE.BoxGeometry(2.6, 3.2, 1.2), body, 0, 1.6, 0);                       // корпус
+    add(new THREE.BoxGeometry(1.8, 1.2, 0.1), this.chargerMat, 0, 2.2, 0.65);         // экран
+    add(new THREE.BoxGeometry(0.3, 0.3, 2.2), body, 0, 0.6, 1.6);                     // штанга с разъёмом
+    add(new THREE.BoxGeometry(0.6, 0.5, 0.6), this.chargerMat, 0, 0.5, 2.7);          // разъём
+    add(new THREE.BoxGeometry(2.8, 0.3, 1.4), new THREE.MeshStandardMaterial({ color: '#ff8a5c', emissive: '#5a1408' }), 0, 3.35, 0);
+    const i = this.padMid, [x, , z] = this.edge(i, this.pitFull + ph - 0.7), t = this.t[i];
+    st.position.set(x, 0, z);
+    st.rotation.y = -Math.atan2(t.z, t.x);   // локальная ось x — вдоль трассы, +z — к центру пит-лейна
+    this.group.add(st);
+  }
+
+  // Анимация станции: пульсирует, пока идёт зарядка
+  update(t, charging) {
+    const k = charging ? 0.8 + 0.6 * Math.sin(t / 120) : 0.5;
+    this.chargerMat.emissiveIntensity = k;
+    this.padMat.opacity = charging ? 0.4 + 0.2 * Math.sin(t / 120) : 0.35;
   }
 
   at(i) { return (i % this.n + this.n) % this.n; }
@@ -79,19 +178,25 @@ export class Track {
     const mat = new THREE.MeshStandardMaterial({ color: '#d9c7cf', roughness: 0.7, side: THREE.DoubleSide });
     const top = new THREE.MeshStandardMaterial({ color: '#ff8a5c', roughness: 0.5, emissive: '#5a1408' });
     const H = C.wallHeight, T = C.wallThick, h = this.half;
-    for (const s of [1, -1]) {
-      const inner = s * h, outer = s * (h + T);
-      this.wallFace(inner, H, mat);
-      this.wallFace(outer, H, mat);
-      this.ribbon(s > 0 ? outer : inner, s > 0 ? inner : outer, H, H, top);
-    }
+    // правая сторона — сплошная по всему кругу
+    this.wallFace(-h, H, mat); this.wallFace(-h - T, H, mat);
+    this.ribbon(-h, -h - T, H, H, top);
+    // левая: вне пит-лейна — обычная стена, на пит-лейне — внешняя стена отодвигается, а между дорогой и
+    // пит-лейном появляется разделительная стенка
+    const s0 = this.pitStart, L = this.pitLen;
+    this.wallRange(s0 + L, this.n - L, h, h + T, mat, top);
+    const outer = i => Math.max(h, this.pitOff(i) + this.ph);
+    this.wallRange(s0, L, outer, i => outer(i) + T, mat, top);
+    let k0 = 0; while (k0 < L && this.sepGap(this.at(s0 + k0)) < 0.3) k0++;
+    let k1 = L; while (k1 > k0 && this.sepGap(this.at(s0 + k1)) < 0.3) k1--;
+    if (k1 > k0) this.wallRange(s0 + k0, k1 - k0, h, i => this.pitOff(i) - this.ph, mat, top);
     // Столбики с подсветкой — дают ощущение скорости
     const geo = new THREE.BoxGeometry(T * 1.6, H * 1.5, T * 1.6);
     const pm = new THREE.MeshStandardMaterial({ color: '#efe3e8', roughness: 0.6 });
     const lamp = new THREE.MeshBasicMaterial({ color: '#ffb36b' });
     const lg = new THREE.BoxGeometry(T * 1.7, 0.35, T * 1.7);
     for (let i = 0; i < this.n; i += C.pillarEvery) for (const s of [1, -1]) {
-      const [x, , z] = this.edge(i, s * (h + T / 2));
+      const [x, , z] = this.edge(i, s > 0 ? Math.max(h, this.pitOff(i) + this.ph) + T / 2 : -(h + T / 2));
       const p = new THREE.Mesh(geo, pm); p.position.set(x, H * 0.75, z); p.castShadow = true; this.group.add(p);
       const l = new THREE.Mesh(lg, lamp); l.position.set(x, H * 1.35, z); this.group.add(l);
     }
@@ -122,19 +227,7 @@ export class Track {
     line.rotation.x = -Math.PI / 2;
     line.position.set(p.x, 0.05, p.z);
     this.group.add(line);
-
-    // Зарядная площадка сразу за стартом
-    const segs = Math.round(C.padLength / C.sampleStep);
-    this.padFrom = 3; this.padTo = 3 + segs;
-    const pad = new THREE.MeshBasicMaterial({ color: '#4cd964', transparent: true, opacity: 0.35, side: THREE.DoubleSide });
-    const pos = [], idx = [];
-    for (let k = 0; k <= segs; k++) { const i = this.padFrom + k; pos.push(...this.edge(i, this.half * 0.45, 0.04), ...this.edge(i, -this.half * 0.45, 0.04)); }
-    for (let k = 0; k < segs; k++) { const b = k * 2; idx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2); }
-    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx);
-    this.padMesh = new THREE.Mesh(g, pad); this.group.add(this.padMesh);
   }
-
-  onPad(i) { return i >= this.padFrom && i <= this.padTo; }
 
   // Ближайший сегмент к точке; ищем рядом с прошлым, чтобы не перепрыгивать на соседний участок трассы
   nearest(x, z, hint = -1) {

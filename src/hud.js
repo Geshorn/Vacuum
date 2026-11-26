@@ -24,8 +24,11 @@ export const hud = {
     c.closePath();
     c.strokeStyle = 'rgba(255,255,255,.85)'; c.lineWidth = 7; c.stroke();
     c.strokeStyle = '#4a3a48'; c.lineWidth = 4; c.stroke();
-    // площадка зарядки и старт
-    const [px, py] = this.toMap(t.p[t.padFrom].x, t.p[t.padFrom].z);
+    // пит-лейн, зарядка и старт
+    c.beginPath();
+    for (let k = 0; k <= t.pitLen; k++) { const i = t.at(t.pitStart + k), [ex, , ez] = t.edge(i, t.pitOff(i)), [x, y] = this.toMap(ex, ez); k ? c.lineTo(x, y) : c.moveTo(x, y); }
+    c.strokeStyle = 'rgba(255,204,51,.8)'; c.lineWidth = 2; c.stroke();
+    const [mx, , mz] = t.edge(t.padMid, t.pitFull), [px, py] = this.toMap(mx, mz);
     c.fillStyle = '#4cd964'; c.fillRect(px - 3, py - 3, 6, 6);
     const [sx, sy] = this.toMap(t.p[0].x, t.p[0].z);
     c.fillStyle = '#fff'; c.fillRect(sx - 2, sy - 5, 4, 10);
