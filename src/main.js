@@ -11,9 +11,11 @@ import { Menu } from './menu.js';
 import { Explosion } from './explosion.js';
 import { Smoke } from './smoke.js';
 import { Trash } from './trash.js';
+import { Kitchen } from './kitchen.js';
 
 const world = new World(document.getElementById('game'));
 const track = new Track(world.scene);
+const kitchen = new Kitchen(world.scene, track);
 const skids = new Skids(world.scene);
 const smoke = new Smoke(world.scene);
 const trash = new Trash(world.scene, track);
@@ -21,7 +23,7 @@ hud.initMap(track);
 hud.clock(); setInterval(() => hud.clock(), 30000);
 
 let bot = null, race = null, st = null, mode = 'menu';
-window.__game = { track, skids, trash };   // для отладки из консоли
+window.__game = { track, skids, trash, world, kitchen };   // для отладки из консоли
 
 // Гонка с выбранным роботом: старт чуть позади линии, носом по ходу трассы
 function startRace(id) {
@@ -241,6 +243,7 @@ function loop(t) {
     menuCamera(dt);
     menu.render(t);
   }
+  kitchen.update(t / 1000);
   world.render();
   requestAnimationFrame(loop);
 }

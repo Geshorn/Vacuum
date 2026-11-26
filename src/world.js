@@ -11,24 +11,20 @@ export class World {
     container.appendChild(r.domElement);
 
     const s = this.scene = new THREE.Scene();
-    s.fog = new THREE.Fog('#6a1230', 90, 230);
+    // тёплый дневной свет кухни; дальние края комнаты растворяются в мягкой дымке
+    s.background = new THREE.Color('#e6d8c6');
+    s.fog = new THREE.Fog('#e6d8c6', 140, 330);
 
-    s.add(new THREE.HemisphereLight('#ffb59a', '#2a0614', 1.1));
-    const sun = this.sun = new THREE.DirectionalLight('#ffc29a', 2.4);
+    s.add(new THREE.HemisphereLight('#fff3e2', '#8a7462', 1.25));
+    const sun = this.sun = new THREE.DirectionalLight('#fff0dc', 2.2);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
     Object.assign(sun.shadow.camera, { left: -60, right: 60, top: 60, bottom: -60, near: 1, far: 200 });
-    sun.shadow.bias = -0.0005;
+    sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.03;   // normalBias убирает «полосатые» тени на гранях
     s.add(sun, sun.target);
     this.sunOffset = new THREE.Vector3(-40, 70, 30);
 
-    // Пол — тёмный «рабочий стол» с сеткой, чтобы чувствовалась скорость
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(1200, 1200), new THREE.MeshStandardMaterial({ color: '#3a0c22', roughness: 1 }));
-    ground.rotation.x = -Math.PI / 2; ground.position.y = -0.02; ground.receiveShadow = true;
-    s.add(ground);
-    const grid = new THREE.GridHelper(1200, 240, '#ff6a4d', '#ff6a4d');
-    grid.material.transparent = true; grid.material.opacity = 0.08; grid.position.y = -0.01;
-    s.add(grid);
+    // Пол и вся обстановка кухни — в kitchen.js
 
     this.camera = new THREE.PerspectiveCamera(C.cam.fov, 1, 0.5, 600);
     this.camTarget = new THREE.Vector3();
@@ -56,9 +52,24 @@ export class World {
     const s = this.camScale;
     this.camera.position.set(this.camTarget.x, C.cam.height * s, this.camTarget.z + C.cam.back * s);
     this.camera.lookAt(this.camTarget);
-    // тень следует за камерой
-    this.sun.position.copy(this.camTarget).add(this.sunOffset);
-    this.sun.target.position.copy(this.camTarget);
+    // Тень следует за камерой, но шагами ровно в один пиксель карты теней: если сдвигать её плавно,
+    // края теней на углах предметов дрожат и мерцают при каждом движении камеры.
+    const L = this.lightBasis || (this.lightBasis = this.makeLightBasis());
+    const p = this.camTarget, step = L.texel;
+    const u = Math.round(p.dot(L.right) / step) * step, v = Math.round(p.dot(L.up) / step) * step, w = p.dot(L.fwd);
+    const snapped = this.tmpV || (this.tmpV = new THREE.Vector3());
+    snapped.copy(L.right).multiplyScalar(u).addScaledVector(L.up, v).addScaledVector(L.fwd, w);
+    this.sun.position.copy(snapped).add(this.sunOffset);
+    this.sun.target.position.copy(snapped);
+  }
+
+  // Оси «экрана» источника света и размер одного пикселя карты теней
+  makeLightBasis() {
+    const fwd = this.sunOffset.clone().negate().normalize();
+    const right = new THREE.Vector3().crossVectors(fwd, new THREE.Vector3(0, 1, 0)).normalize();
+    const up = new THREE.Vector3().crossVectors(right, fwd).normalize();
+    const cam = this.sun.shadow.camera;
+    return { fwd, right, up, texel: (cam.right - cam.left) / this.sun.shadow.mapSize.x };
   }
 
   render() { this.renderer.render(this.scene, this.camera); }
