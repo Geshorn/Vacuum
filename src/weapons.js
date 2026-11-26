@@ -37,7 +37,7 @@ export class Combat {
   }
 
   // 💨 Пылевая ракета: комок пыли летит над бортиками к ближайшему сопернику впереди (самонаводится)
-  // и при попадании облепляет его пылью — «ослепление» на blind секунд
+  // и взрывается при попадании (или в конце полёта), отбрасывая всех вокруг — см. blast()
   shootRocket(bot, now, bots) {
     const P = W().rocket, fx = Math.cos(bot.a), fz = Math.sin(bot.a);
     // цель: ближайший впереди в широком конусе, иначе просто ближайший
@@ -57,7 +57,7 @@ export class Combat {
     const st = { x: bot.x + fx * (bot.s.radius + 1), z: bot.z + fz * (bot.s.radius + 1), a: bot.a, until: now + P.life, k: 0 };
     const cleanup = () => trail.forEach(s => this.group.remove(s));
     this.extras.push({ mesh: m, update: (now, dt, bots, onHit) => {
-      if (now > st.until || (tg && !tg.mesh.visible && !(tg = null))) { cleanup(); return false; }
+      if (tg && !tg.mesh.visible) tg = null;          // цель выбыла — летит прямо и взорвётся в конце
       if (tg) {                                      // доворот к цели
         const want = Math.atan2(tg.z - st.z, tg.x - st.x);
         let da = Math.atan2(Math.sin(want - st.a), Math.cos(want - st.a));
@@ -68,11 +68,51 @@ export class Combat {
       // шлейф пыли
       const s = trail[st.k++ % trail.length]; s.position.copy(m.position); s.material.opacity = 0.6; s.scale.setScalar(1);
       for (const t of trail) { t.material.opacity = Math.max(0, t.material.opacity - dt * 1.5); t.scale.multiplyScalar(1 + dt * 1.5); }
-      const b = this.touching(st.x, st.z, 1.2, bots, bot);
-      if (!b) return true;
+      if (!this.touching(st.x, st.z, 1.2, bots, bot) && now < st.until - 0.05) return true;
       cleanup();
-      if (!this.absorb(b, now)) { b.blindUntil = now + P.blind; b.v *= P.slow; b.hitN = [-Math.cos(st.a), -Math.sin(st.a)]; onHit(b, P.damage, bot, 'rocket'); }
+      this.blast(st.x, st.z, bot, now, bots, onHit);   // попала или кончилось время — взрыв
       return false;
+    } });
+  }
+
+  // Толчок роботу в мировом направлении (nx, nz) с силой power (лёгких отбрасывает дальше)
+  push(b, nx, nz, power) {
+    const p = power / Math.sqrt(b.s.mass), c = Math.cos(b.a), s = Math.sin(b.a);
+    const wx = c * b.v - s * b.lat + nx * p, wz = s * b.v + c * b.lat + nz * p;
+    b.v = wx * c + wz * s; b.lat = -wx * s + wz * c;
+  }
+
+  // 💥 Взрыв пылевой ракеты: всех, кроме стрелявшего, в радиусе отбрасывает от центра;
+  // толчок и урон слабеют к краю
+  blast(x, z, owner, now, bots, onHit) {
+    const P = W().rocket;
+    for (const b of bots) {
+      if (b === owner || !b.mesh.visible) continue;
+      const dx = b.x - x, dz = b.z - z, d = Math.hypot(dx, dz);
+      if (d > P.radius) continue;
+      if (this.absorb(b, now)) continue;
+      const k = 1 - d / P.radius, nx = d > 0.01 ? dx / d : Math.cos(b.a), nz = d > 0.01 ? dz / d : Math.sin(b.a);
+      this.push(b, nx, nz, P.push * (0.4 + 0.6 * k));
+      b.slipUntil = now + 0.6; b.spin = (Math.random() < 0.5 ? -1 : 1) * 4;
+      b.hitN = [-nx, -nz];
+      onHit(b, P.damage * (0.4 + 0.6 * k), owner, 'rocket');
+    }
+    // облако пыли: расширяющееся кольцо и клубы
+    const g = new THREE.Group(); g.position.set(x, 0, z); this.group.add(g);
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.8, 1.2, 40), new THREE.MeshBasicMaterial({ color: '#d8d4dc', transparent: true, opacity: 0.8, depthWrite: false, side: THREE.DoubleSide }));
+    ring.rotation.x = -Math.PI / 2; ring.position.y = 0.15; g.add(ring);
+    const puffs = [];
+    for (let k = 0; k < 14; k++) {
+      const m = new THREE.Mesh(new THREE.SphereGeometry(rnd(0.8, 1.6), 10, 8), new THREE.MeshStandardMaterial({ color: '#a8a4b0', roughness: 1, transparent: true, opacity: 0.85, depthWrite: false }));
+      const a = rnd(0, 6.3); m.position.set(0, 1, 0); g.add(m); puffs.push({ m, vx: Math.cos(a) * rnd(8, 16), vz: Math.sin(a) * rnd(8, 16), vy: rnd(2, 6) });
+    }
+    const born = now;
+    this.extras.push({ mesh: g, update: (now, dt) => {
+      const f = (now - born) / 0.9;
+      if (f >= 1) return false;
+      ring.scale.setScalar(1 + f * P.radius); ring.material.opacity = 0.8 * (1 - f);
+      for (const p of puffs) { p.m.position.x += p.vx * dt; p.m.position.z += p.vz * dt; p.m.position.y += p.vy * dt; p.vx *= 0.9; p.vz *= 0.9; p.m.scale.setScalar(1 + f * 1.5); p.m.material.opacity = 0.85 * (1 - f); }
+      return true;
     } });
   }
 
