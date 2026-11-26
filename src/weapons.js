@@ -124,7 +124,13 @@ export class Combat {
       if (now > until) return false;
       const b = this.touching(x, z, 0.9, bots, now - born < 1 ? bot : null);
       if (!b) return true;
-      if (!this.absorb(b, now)) { b.twirl = Math.PI * 2; b.v *= W().banana.slow; onHit(b, 0, bot, 'banana'); }
+      if (!this.absorb(b, now)) {
+        // 1.5 оборота (плюс-минус) за stun секунд, руль и газ не слушаются — робот скользит юзом
+        const B = W().banana;
+        b.twirl = Math.PI * 2 * B.turns + rnd(-1, 1); b.twirlRate = b.twirl / B.stun; b.stunUntil = now + B.stun;
+        b.v *= B.slow; this.showStars(b, true);
+        onHit(b, 0, bot, 'banana');
+      }
       return false;                                  // кожура использована
     } });
   }
@@ -216,6 +222,19 @@ export class Combat {
     } });
   }
 
+  // Звёздочки над оглушённым роботом (после банана)
+  showStars(bot, on) {
+    if (on && !bot.starsMesh) {
+      const g = new THREE.Group(), mat = new THREE.MeshBasicMaterial({ color: '#ffd84a' });
+      for (let k = 0; k < 4; k++) {
+        const s = new THREE.Mesh(new THREE.OctahedronGeometry(0.35, 0), mat), a = k / 4 * Math.PI * 2;
+        s.position.set(Math.cos(a) * 1.3, 0, Math.sin(a) * 1.3); s.scale.y = 0.5; g.add(s);
+      }
+      g.position.y = 2.4; bot.mesh.add(g); bot.starsMesh = g;
+    }
+    if (!on && bot.starsMesh) { bot.mesh.remove(bot.starsMesh); bot.starsMesh = null; }
+  }
+
   // Пламя турбо: два голубых конуса позади робота
   showFlame(bot, on) {
     if (on && !bot.flameMesh) {
@@ -284,8 +303,12 @@ export class Combat {
       const sl = b.slipUntil > now;
       b.gripMul = sl ? 0.08 : 1;
       if (sl) { b.a += b.spin * dt; b.spin *= Math.exp(-1.5 * dt); }
-      // разворот на банане: полный оборот за ~0.7 с
-      if (b.twirl > 0) { const d = Math.min(b.twirl, 9 * dt); b.a += d; b.twirl -= d; b.gripMul = 0.2; }
+      // банан: крутится юзом, пока не кончится оборот; над головой звёздочки
+      if (b.twirl > 0) { const d = Math.min(b.twirl, (b.twirlRate || 9) * dt); b.a += d; b.twirl -= d; b.gripMul = 0.15; }
+      if (b.starsMesh) {
+        if (b.stunUntil > now) { b.starsMesh.rotation.y += dt * 6; b.starsMesh.position.y = 2.4 + Math.sin(now * 8) * 0.15; }
+        else this.showStars(b, false);
+      }
     }
     this.extras = this.extras.filter(e => { const alive = e.update(now, dt, bots, onHit); if (!alive) this.group.remove(e.mesh); return alive; });
 

@@ -32,7 +32,9 @@ export class Rival {
     const b = this.bot, tr = this.track;
     if (this.out) { if (this.boom) this.boom.update(dt); this.smoke.update(dt, null); return; }
     const a0 = b.a;
-    if (b.dead) {                                   // села батарея — постоит и оживёт
+    if (b.stunUntil > t) {                          // поскользнулся на банане — скользит без управления
+      b.v *= Math.exp(-0.9 * dt);
+    } else if (b.dead) {                            // села батарея — постоит и оживёт
       b.v *= Math.exp(-3 * dt);
       if (now > b.deadUntil) { b.dead = false; b.bat = Math.max(b.bat, C.battEmergency); }
     } else {

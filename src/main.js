@@ -105,7 +105,9 @@ function update(t, dt) {
   if (manual !== st.wasManual) { st.wasManual = manual; hud.say(manual ? P.manualOn : P.manualOff); }
 
   const a0 = bot.a;
-  if (bot.dead) {
+  if (bot.stunUntil > t / 1000) {                   // поскользнулся на банане: руль и газ не работают, скользит юзом
+    bot.v *= Math.exp(-0.9 * dt);
+  } else if (bot.dead) {
     bot.v *= Math.exp(-3 * dt); bot.drifting = false;
     if (t > bot.deadUntil) { bot.dead = false; bot.bat = Math.max(bot.bat, C.battEmergency); hud.say(P.batRevive, 2400); }
   } else if (manual) { bot.manual(input.keys, dt); st.pitting = st.pitCommit = false; }
