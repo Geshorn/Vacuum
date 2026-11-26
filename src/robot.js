@@ -46,6 +46,18 @@ export class Robot {
     scene.add(this.mesh);
     // Состояние: позиция на плоскости XZ, угол, скорость вдоль носа (v) и боком (lat)
     Object.assign(this, { x: 0, z: 0, a: 0, v: 0, lat: 0, drifting: false, seg: -1, bat: 100, dead: false, deadUntil: 0 });
+    this.bin = 0; this.binMass = 0; this.binValue = 0;   // binValue — сколько жетонов дадут за содержимое   // заполнение контейнера, % (и при каком значении пересчитана физика)
+  }
+
+  // Мусор в контейнере утяжеляет робота: пересчитываем ходовые характеристики от новой массы
+  // (размер и ХП не меняются). Пересчёт — когда заполнение изменилось хотя бы на 1%.
+  updateLoad() {
+    if (Math.abs(this.bin - this.binMass) < 1 && !(this.bin === 0 && this.binMass)) return;
+    this.binMass = this.bin;
+    const k = 1 + this.bin / 100 * C.bin.massAdd, sp = this.spec;
+    // масса растёт, а сила двигателя, тормозов и руля — нет; расход заряда считаем от новой массы
+    this.s = derive({ ...sp, mass: sp.mass * k, drainMul: (sp.drainMul ?? Math.pow(sp.mass, C.drainMassPow)) * Math.pow(k, C.drainMassPow) });
+    this.s.radius = sp.radius; this.s.hp = sp.hp;
   }
 
   speed() { return Math.hypot(this.v, this.lat); }

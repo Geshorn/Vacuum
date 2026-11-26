@@ -59,6 +59,15 @@ export const hud = {
     D.hp.classList.toggle('fix', repairing);
   },
 
+  // Контейнер для мусора; unloading — сейчас сдаём мусор на пит-стопе
+  bin(pct, unloading = false) {
+    const p = Math.round(pct);
+    $('binfill').style.width = p + '%'; $('binpct').textContent = p + '%';
+    $('bin').className = (p >= 100 ? 'full' : '') + (unloading ? ' out' : '');
+  },
+
+  tokens(n) { $('tokval').textContent = Math.floor(n); },
+
   // Встряхнуть полоску ХП при ударе
   hurt() {
     D.hp.classList.remove('hit'); void D.hp.offsetWidth; D.hp.classList.add('hit');
@@ -83,9 +92,10 @@ export const hud = {
 
   // Экран «Выбыл» после взрыва
   onOut(again, menu) { $('o-again').onclick = again; $('o-menu').onclick = menu; },
-  showOut({ robot, laps, best }) {
+  showOut({ robot, laps, best, collected = 0, earned = 0 }) {
     $('o-robot').textContent = robot + ' взорвался и выбывает из гонки';
     $('o-laps').textContent = laps; $('o-best').textContent = best ? fmtTime(best) : '—';
+    $('o-trash').textContent = collected; $('o-tok').textContent = Math.floor(earned);
     $('out').classList.add('on'); this.hideHint();
   },
   hideOut() { $('out').classList.remove('on'); },

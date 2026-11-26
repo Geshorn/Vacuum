@@ -19,6 +19,12 @@ html,body{height:100%;margin:0;overflow:hidden;color:var(--ink);
 #batt.chg #battpct::after{content:" ⚡"}
 
 #rname{opacity:.85}
+#tok{font-variant-numeric:tabular-nums}
+#bin{display:flex;align-items:center;gap:5px}
+#binbar{display:block;width:50px;height:8px;border-radius:4px;background:rgba(255,255,255,.2);overflow:hidden}
+#binfill{display:block;height:100%;width:0;background:linear-gradient(90deg,#c9a46a,#8a6a3c);border-radius:4px}
+#bin.full #binfill{background:#ff3b30}#bin.full #binpct{color:#ff8a7a}
+#bin.out #binpct::after{content:" ♻️"}
 #hp{display:flex;align-items:center;gap:6px}
 #hpbar{display:block;width:60px;height:8px;border-radius:4px;background:rgba(255,255,255,.2);overflow:hidden}
 #hpfill{display:block;height:100%;width:100%;background:linear-gradient(90deg,#ff3b4e,#ff8a5c);border-radius:4px;transition:width .15s}

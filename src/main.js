@@ -10,16 +10,18 @@ import { Skids } from './skids.js';
 import { Menu } from './menu.js';
 import { Explosion } from './explosion.js';
 import { Smoke } from './smoke.js';
+import { Trash } from './trash.js';
 
 const world = new World(document.getElementById('game'));
 const track = new Track(world.scene);
 const skids = new Skids(world.scene);
 const smoke = new Smoke(world.scene);
+const trash = new Trash(world.scene, track);
 hud.initMap(track);
 hud.clock(); setInterval(() => hud.clock(), 30000);
 
 let bot = null, race = null, st = null, mode = 'menu';
-window.__game = { track, skids };   // для отладки из консоли
+window.__game = { track, skids, trash };   // для отладки из консоли
 
 // Гонка с выбранным роботом: старт чуть позади линии, носом по ходу трассы
 function startRace(id) {
@@ -28,7 +30,8 @@ function startRace(id) {
   bot = new Robot(world.scene, ROBOTS[id]);
   const s0 = track.at(-6);
   bot.x = track.p[s0].x; bot.z = track.p[s0].z; bot.a = Math.atan2(track.t[s0].z, track.t[s0].x); bot.seg = s0;
-  race = { lap: 0, lapStart: 0, best: 0, started: false, lastSeg: s0 };
+  race = { lap: 0, lapStart: 0, best: 0, started: false, lastSeg: s0, tokens: 0, earned: 0, collected: 0 };
+  trash.reset();
   st = { pitting: false, wasManual: false, lastWallSay: 0, lastDriftSay: 0, lastChargeSay: 0, warned: false, wasDrift: false };
   input.keys = {}; input.lastKeyTime = 0;
   skids.clear(); smoke.clear();
@@ -59,7 +62,7 @@ function explode(t) {
   boom = new Explosion(world.scene, bot.x, bot.z, bot.spec.color, bot.s.radius / 1.3);
   hud.say(P.broken, 1500);
   hud.battery(bot.bat, false); hud.health(0, bot.s.hp); hud.speed(0);
-  explode.outT = setTimeout(() => hud.showOut({ robot: bot.spec.name, laps: race.lap, best: race.best }), 1800);
+  explode.outT = setTimeout(() => hud.showOut({ robot: bot.spec.name, laps: race.lap, best: race.best, collected: race.collected, earned: race.earned }), 1800);
 }
 
 // Пока открыто меню, камера медленно едет вдоль трассы
@@ -83,10 +86,10 @@ function update(t, dt) {
     if (t > bot.deadUntil) { bot.dead = false; bot.bat = Math.max(bot.bat, C.battEmergency); hud.say(P.batRevive, 2400); }
   } else if (manual) { bot.manual(input.keys, dt); st.pitting = st.pitCommit = false; }
   else {
-    // Автопилот заезжает на пит-стоп только при низком заряде: сворачивает в пит-лейн, тормозит у станции
-    // и стоит до полной зарядки. Если решение пришло, когда съезд уже проехан, — заедет на следующем круге.
+    // Автопилот заезжает на пит-стоп при низком заряде, низком ХП или почти полном контейнере: сворачивает в пит-лейн,
+    // тормозит у станции и стоит до конца обслуживания. Если решение пришло, когда съезд уже проехан, — заедет на следующем круге.
     const hpPct = bot.hp / bot.s.hp * 100;
-    if (!st.pitting && (bot.bat < Math.min(80, C.autoPitBelow * bot.s.drainMul) || hpPct < C.autoPitHp)) st.pitting = true;
+    if (!st.pitting && (bot.bat < Math.min(80, C.autoPitBelow * bot.s.drainMul) || hpPct < C.autoPitHp || bot.bin >= C.bin.autoPitAt)) st.pitting = true;
     const k = track.pitK(bot.seg);
     // решение «еду в боксы» принимается до середины съезда и дальше не меняется
     if (k < 0 || k < track.pitRamp * 0.4) st.pitCommit = st.pitting;
@@ -101,8 +104,9 @@ function update(t, dt) {
       const ahead = (track.padMid - bot.seg + track.n) % track.n * C.sampleStep;   // расстояние до центра площадки
       if (bot.onPad) bot.v = Math.max(0, bot.v - bot.s.brake * dt);
       else if (ahead < 40) bot.v = Math.min(bot.v, 3 + ahead * 0.45);
-      // уезжает, когда заряжен, починен и отполирован
-      if (bot.bat >= 100 && bot.hp >= bot.s.hp && !bot.dents.length && !bot.scratches.length) st.pitting = false;
+      // уезжает, когда заряжен, мусор сдан и робот починен и отполирован (или на ремонт не хватает жетонов)
+      const fixed = bot.hp >= bot.s.hp && !bot.dents.length && !bot.scratches.length;
+      if (bot.bat >= 100 && bot.bin <= 0 && (fixed || race.tokens < 0.01)) st.pitting = false;
     }
   }
 
@@ -148,32 +152,68 @@ function update(t, dt) {
   race.lastSeg = seg;
   hud.race(race.lap, race.started ? t - race.lapStart : 0, race.best);
 
+  // Мусор: робот собирает его в контейнер, пока тот не полон. Скрепки ещё и царапают корпус.
+  for (const kind of trash.update(t / 1000, dt, bot, bot.bin >= 100)) {
+    const K = C.trash.kinds[kind];
+    bot.bin = Math.min(100, bot.bin + K.fill); bot.binValue += K.value; race.collected++;
+    if (kind === 'coin' && t - (st.lastCoinSay || 0) > 4000) { st.lastCoinSay = t; hud.say(P.coin, 1200); }
+    if (K.damage) {
+      bot.hp = Math.max(0, bot.hp - K.damage);
+      const q = Math.random() * Math.PI * 2; bot.hitN = [Math.cos(q), Math.sin(q)]; bot.scratch();
+      hud.hurt();
+      if (bot.hp <= 0) { explode(t); return; }
+      if (t - st.lastWallSay > 2500) { st.lastWallSay = t; hud.say(P.clip, 1400); }
+    }
+  }
+  if (bot.bin >= 100 && !st.binFullSaid) { st.binFullSaid = true; hud.say(P.binFull, 2400); }
+  if (bot.bin >= 50 && !st.binHalfSaid) { st.binHalfSaid = true; hud.say(P.binHalf, 1600); }
+  if (bot.bin < 40) st.binFullSaid = st.binHalfSaid = false;
+  bot.updateLoad();
+
   // Батарея: заряжается на зелёной площадке, иначе расходуется
   const spd = bot.speed();
   // На площадке заряд только растёт до 100% и не тратится — иначе значение дёргается у 100%
   const charging = bot.onPad && bot.bat < 100;
-  const repairing = bot.onPad && bot.hp < bot.s.hp;
+  let repairing = false, unloading = false;
   if (bot.onPad) {
-    bot.bat = Math.min(100, bot.bat + C.padCharge * dt);
-    bot.hp = Math.min(bot.s.hp, bot.hp + bot.s.hp * C.repairRate / 100 * dt);
+    bot.bat = Math.min(100, bot.bat + C.padCharge * dt);   // зарядка бесплатная
+    // Сдача мусора: контейнер пустеет, за каждый сданный % — жетоны утилизации
+    if (bot.bin > 0) {
+      // жетоны выдаются пропорционально ценности того, что лежит в контейнере
+      const amt = Math.min(bot.bin, C.bin.unloadRate * dt), pay = bot.binValue * amt / bot.bin;
+      bot.bin -= amt; bot.binValue -= pay; race.tokens += pay; race.earned += pay;
+      if (bot.bin <= 0.001) { bot.bin = 0; bot.binValue = 0; }
+      unloading = true;
+      if (!st.unloadSaid) { st.unloadSaid = true; hud.say(P.unload, 1600); }
+    }
+    // Ремонт платный: чиним, пока хватает жетонов
+    if (bot.hp < bot.s.hp) {
+      const perHp = C.bin.repairCost * 100 / bot.s.hp;                          // жетонов за 1 ХП
+      const gain = Math.min(bot.s.hp - bot.hp, bot.s.hp * C.repairRate / 100 * dt, race.tokens / perHp);
+      if (gain > 0) { bot.hp += gain; race.tokens = Math.max(0, race.tokens - gain * perHp); repairing = true; }
+      else if (!unloading && !st.noTokSaid) { st.noTokSaid = true; st.lastChargeSay = t; hud.say(P.noTokens, 2000); }
+    }
     // Вмятины и царапины исчезают по одной так, чтобы последняя пропала к концу ремонта
-    // (если ХП уже полное, а царапины есть — полируем не меньше 0.8 с)
+    // (если ХП уже полное, а царапины есть — полируем не меньше 0.8 с; без жетонов на ремонт метки остаются)
     const marks = bot.dents.length + bot.scratches.length;
-    if (marks) {
+    if (marks && (repairing || bot.hp >= bot.s.hp)) {
       const rem = (bot.s.hp - bot.hp) / (bot.s.hp * C.repairRate / 100);   // сколько секунд ремонта осталось
       const left = rem > 0 ? Math.max(0.3, rem) : 0.8;
       st.polish = (st.polish || 0) + marks / left * dt;
       while (st.polish >= 1 && bot.removeMark()) st.polish--;
     } else st.polish = 0;
-    if ((charging || repairing) && t - st.lastChargeSay > 8000) { st.lastChargeSay = t; hud.say(repairing ? P.repairing : P.charging, 1400); }
-  } else if (!bot.dead) bot.bat = Math.max(0, bot.bat - (C.drain.base + spd * C.drain.speed + (bot.drifting ? C.drain.drift : 0)) * bot.s.drainMul * dt);
+    if (!unloading && (charging || repairing) && t - st.lastChargeSay > 8000) { st.lastChargeSay = t; hud.say(repairing ? P.repairing : P.charging, 1400); }
+  } else { st.unloadSaid = st.noTokSaid = false; }
+  if (!bot.onPad && !bot.dead) bot.bat = Math.max(0, bot.bat - (C.drain.base + spd * C.drain.speed + (bot.drifting ? C.drain.drift : 0)) * bot.s.drainMul * dt);
   if (bot.bat > 30) st.warned = false;
   if (bot.bat < 20 && !st.warned) { st.warned = true; hud.say(P.batWarn, 2400); }
   if (bot.bat <= 0 && !bot.dead) { bot.dead = true; bot.deadUntil = t + C.deadMs; hud.say(P.batDead, 3000); }
   hud.battery(bot.bat, charging);
-  track.update(t, charging || repairing);
+  track.update(t, charging || repairing || unloading);
   hud.speed(spd);
   hud.health(bot.hp, bot.s.hp, repairing);
+  hud.bin(bot.bin, unloading);
+  hud.tokens(race.tokens);
 }
 
 let last = 0;
@@ -191,6 +231,7 @@ function loop(t) {
     // робот взорвался: камера стоит на месте взрыва и трясётся
     boom.update(dt);
     smoke.update(dt, null);   // старый дым досыпает, новый не идёт
+    trash.update(t / 1000, dt, null);
     world.follow(bot, dt);
     const k = boom.shake() * 1.2;
     world.camera.position.x += (Math.random() - 0.5) * k; world.camera.position.y += (Math.random() - 0.5) * k;
