@@ -304,7 +304,7 @@ function damage(who, dmg, by, t, kind) {
   if (dmg > 3) who.dent(dmg);
   who.scratch(); hud.hurt();
   if (who.hp <= 0) explode(t);
-  else if (t - st.lastWallSay > 2000) { st.lastWallSay = t; hud.say(kind === 'trash' ? P.shot : P.bump, 1400); }
+  else if (t - st.lastWallSay > 2000) { st.lastWallSay = t; hud.say(kind === 'trash' ? P.shot : kind === 'cap' ? P.cap : P.bump, 1400); }
 }
 
 // Роботы толкаются; урон игроку — с репликами и полоской ХП, соперникам — через их hurt()

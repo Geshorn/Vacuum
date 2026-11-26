@@ -36,6 +36,38 @@ export class Combat {
     return null;
   }
 
+  // 🍾 Пробка: летит вперёд и отскакивает от бортиков, как бильярдный шар (до bounces раз)
+  shootCap(bot, now) {
+    const P = W().cap, fx = Math.cos(bot.a), fz = Math.sin(bot.a), tr = this.track;
+    const m = new THREE.Group(); this.group.add(m);
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.75, 0.45, 18), new THREE.MeshStandardMaterial({ color: '#d9503f', metalness: 0.5, roughness: 0.3 }));
+    body.castShadow = true; m.add(body);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.75, 0.1, 6, 18), new THREE.MeshStandardMaterial({ color: '#f2efe8', metalness: 0.6 })); rim.rotation.x = Math.PI / 2; m.add(rim);
+    const st = { x: bot.x + fx * (bot.s.radius + 1), z: bot.z + fz * (bot.s.radius + 1), vx: fx * (P.speed + Math.max(0, bot.v)), vz: fz * (P.speed + Math.max(0, bot.v)), seg: bot.seg, bounces: 0, until: now + P.life };
+    m.position.set(st.x, 0.8, st.z);
+    this.extras.push({ mesh: m, update: (now, dt, bots, onHit) => {
+      if (now > st.until) return false;
+      st.x += st.vx * dt; st.z += st.vz * dt;
+      st.seg = tr.nearest(st.x, st.z, st.seg);
+      const lat = tr.lateral(st.seg, st.x, st.z), [lo, hi] = tr.bounds(st.seg, lat, 0.8);
+      if (lat < lo || lat > hi) {                    // рикошет от бортика: отражаем скорость по нормали стены
+        if (++st.bounces > P.bounces) return false;
+        const n = tr.nrm[st.seg], s = lat > hi ? -1 : 1, nx = n.x * s, nz = n.z * s;
+        const vn = st.vx * nx + st.vz * nz;
+        if (vn < 0) { st.vx -= 2 * vn * nx; st.vz -= 2 * vn * nz; }
+        const back = lat > hi ? hi - lat : lo - lat; st.x += n.x * back; st.z += n.z * back;
+      }
+      m.position.set(st.x, 0.8, st.z); m.rotation.y += dt * 14;
+      const b = this.touching(st.x, st.z, 0.8, bots, now < st.until - P.life + 0.25 ? bot : null);
+      if (!b) return true;
+      if (!this.absorb(b, now)) {
+        const sp = Math.hypot(st.vx, st.vz); b.hitN = [-st.vx / sp, -st.vz / sp]; b.v *= P.slow;
+        onHit(b, P.damage, bot, 'cap');
+      }
+      return false;
+    } });
+  }
+
   // 🍌 Банановая кожура позади: кто наедет, того разворачивает на 360° и сильно тормозит
   dropPeel(bot, now) {
     const fx = Math.cos(bot.a), fz = Math.sin(bot.a), d = bot.s.radius + 2;
@@ -73,6 +105,8 @@ export class Combat {
       const n = Math.round(T.time * T.rate);
       for (let k = 0; k < n; k++) this.queue.push({ bot, at: now + k / T.rate });
       bot.firingUntil = now + T.time;
+    } else if (w === 'cap') {
+      this.shootCap(bot, now);
     } else if (w === 'banana') {
       this.dropPeel(bot, now);
     } else if (w === 'sponge') {
@@ -211,6 +245,7 @@ export class Combat {
     let go = false;
     if (w === 'soap' || w === 'banana') go = others.some(o => o.dot < -0.3 && o.d < A.soapRange) || held > A.maxHold;
     if (w === 'trash') go = b.bin >= W().trash.cost && others.some(o => o.dot > 0.6 && o.d < A.shootRange);
+    if (w === 'cap') go = others.some(o => o.dot > 0.7 && o.d < 55) || held > A.maxHold;
     if (w === 'sponge') go = b.hp < b.s.hp * 0.8 || others.some(o => o.d < 14) || held > A.maxHold;
     if (go && held > A.react && this.fire(b, now)) { rival.gotAt = 0; return; }
     // оружие, которым никак не воспользоваться (залп без мусора), выбрасываем — чтобы взять новое из коробок

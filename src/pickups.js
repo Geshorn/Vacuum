@@ -9,6 +9,7 @@ export const WEAPONS = {
   trash:  { name: 'Залп мусором',    icon: '🗑️' },
   sponge: { name: 'Губка-щит',       icon: '🧽' },
   banana: { name: 'Банановая кожура', icon: '🍌' },
+  cap:    { name: 'Пробка',          icon: '🍾' },
 };
 
 function boxTexture() {
