@@ -109,7 +109,7 @@ export class Rival {
 
   explode() {
     const b = this.bot;
-    this.out = true; b.v = b.lat = 0; b.mesh.visible = false;
+    this.out = true; this.outAt = performance.now(); b.v = b.lat = 0; b.mesh.visible = false;
     this.boom = new Explosion(this.scene, b.x, b.z, b.spec.color, b.s.radius / 1.3);
   }
 

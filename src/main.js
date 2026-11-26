@@ -41,7 +41,10 @@ function startRace(id) {
   const slot = k => [-6 - Math.floor(k / 2) * 8, k % 2 ? -3.5 : 3.5];
   const [ps, pl] = slot(2), s0 = track.at(ps), [px, , pz] = track.edge(s0, pl);
   bot.x = px; bot.z = pz; bot.a = Math.atan2(track.t[s0].z, track.t[s0].x); bot.seg = s0;
-  race = { lap: 0, lapStart: 0, best: 0, started: false, lastSeg: s0, tokens: 0, earned: 0, collected: 0, crossings: 0 };
+  race = { lap: 0, lapStart: 0, best: 0, started: false, lastSeg: s0, tokens: 0, earned: 0, collected: 0, crossings: 0,
+    // режим игры из меню: гонка на laps кругов (0 — без конца), арена или уборка на время
+    mode: settings.mode, laps: settings.laps, cleanTime: settings.cleanTime, t0: performance.now(), score: 0, finishedAt: 0 };
+  hud.hideResults();
   for (const r of rivals) r.dispose();
   const pool = Object.keys(ROBOTS).filter(k => k !== id).sort(() => Math.random() - 0.5);
   rivals = pool.slice(0, settings.rivals).map((rid, k) => {
@@ -63,8 +66,13 @@ function startRace(id) {
 
 const menu = new Menu(startRace);
 menu.show(PLAYER_ROBOT);
-function toMenu() { clearBoom(); hud.hideOut(); mode = 'menu'; menu.show(bot.spec.id); }
+function toMenu() { clearBoom(); hud.hideOut(); hud.hideResults(); mode = 'menu'; menu.show(bot.spec.id); }
 addEventListener('keydown', e => {
+  if (mode === 'done') {                            // экран итогов
+    if (e.code === 'Escape') toMenu();
+    else if (e.code === 'Enter' && performance.now() - race.doneAt > 800) startRace(bot.spec.id);
+    return;
+  }
   if (e.code === 'Space' && mode === 'race') {      // применить оружие
     e.preventDefault();
     const w = bot.weapon;
@@ -76,11 +84,64 @@ addEventListener('keydown', e => {
   else if (e.code === 'Enter' && mode === 'out' && boom?.t > 1) startRace(bot.spec.id);
 });
 hud.onOut(() => startRace(bot.spec.id), toMenu);
+hud.onResults(() => startRace(bot.spec.id), toMenu);
+
+// ── Режимы игры: финиш, конец арены и уборки, итоговая таблица ──────────────────
+const fmt = ms => { const s = ms / 1000; return Math.floor(s / 60) + ':' + (s % 60).toFixed(1).padStart(4, '0'); };
+
+// Проверка конца игры по режиму; вызывается каждый кадр гонки
+function checkEnd(t) {
+  const R = race, alive = rivals.filter(r => !r.out);
+  if (R.mode === 'race' && R.laps) {
+    for (const r of rivals) if (!r.finishedAt && !r.out && r.race.crossings >= R.laps + 1) r.finishedAt = t;
+    if (R.lap >= R.laps) { R.finishedAt = t; finish(t, 'Финиш!'); }
+  } else if (R.mode === 'arena') {
+    if (rivals.length && !alive.length) finish(t, 'Победа!');
+  } else if (R.mode === 'clean') {
+    if (t - R.t0 >= R.cleanTime * 1000) finish(t, 'Время вышло!');
+  }
+}
+
+// Таблица мест: строки { name, me, info, out }
+function standings(t) {
+  const R = race, me = { name: bot.spec.name, me: true, out: false, bot };
+  const all = [me, ...rivals.map(r => ({ name: r.bot.spec.name, me: false, out: r.out, r, bot: r.bot }))];
+  const prog = e => e.me ? R.crossings * track.n + bot.seg : e.r.progress();
+  const lapOf = e => Math.max(0, (e.me ? R.crossings : e.r.race.crossings) - 1);
+  if (R.mode === 'clean') {
+    all.forEach(e => { e.key = e.me ? R.score : e.r.score || 0; e.info = Math.round(e.key) + ' ♻️'; });
+    all.sort((a, b) => b.key - a.key);
+  } else if (R.mode === 'arena') {
+    all.forEach(e => { e.key = e.out ? (e.r ? e.r.outAt : 0) : Infinity; e.info = e.out ? 'выбыл' : 'уцелел'; });
+    all.sort((a, b) => b.key - a.key);
+  } else {
+    all.forEach(e => {
+      const fin = e.me ? R.finishedAt : e.r.finishedAt;
+      e.key = fin ? 1e12 - fin : e.out ? -1e12 + (e.r.outAt || 0) : prog(e);
+      e.info = fin ? fmt(fin - R.t0) : e.out ? 'выбыл' : R.laps ? `круг ${Math.min(lapOf(e) + 1, R.laps)}/${R.laps}` : `круг ${lapOf(e) + 1}`;
+    });
+    all.sort((a, b) => b.key - a.key);
+  }
+  return all;
+}
+
+function finish(t, title) {
+  if (mode !== 'race') return;
+  mode = 'done'; race.doneAt = performance.now();
+  input.keys = {}; input.lastKeyTime = 0;           // дальше робот едет сам на автопилоте
+  const rows = standings(t), mine = rows.findIndex(e => e.me) + 1;
+  const sub = race.mode === 'clean' ? `Ты собрал ${Math.round(race.score)} ♻️ — ${mine}-е место из ${rows.length}`
+    : race.mode === 'arena' ? 'Все соперники выбыли — ты последний уцелевший!'
+    : `Ты ${mine}-й из ${rows.length}`;
+  hud.showResults({ title: mine === 1 ? (race.mode === 'race' ? 'Победа!' : title) : title, sub, rows });
+  hud.say(mine === 1 ? P.win : P.finish, 2500);
+}
 
 // ХП кончились: робот взрывается и выбывает из гонки
 let boom = null;
 function clearBoom() { if (boom) { boom.dispose(); boom = null; } clearTimeout(explode.outT); }
 function explode(t) {
+  if (mode !== 'race') { bot.hp = Math.max(bot.hp, 1); return; }   // после финиша робота уже не взрываем
   mode = 'out';
   bot.v = bot.lat = 0; bot.mesh.visible = false;
   boom = new Explosion(world.scene, bot.x, bot.z, bot.spec.color, bot.s.radius / 1.3);
@@ -102,7 +163,7 @@ function menuCamera(dt) {
 function update(t, dt) {
   // Пока игрок стоит на пит-стопе, автопилот не перехватывает управление
   if (st.wasManual && bot.onPad && bot.speed() < 2) input.lastKeyTime = t;
-  const manual = !bot.dead && input.lastKeyTime > 0 && t - input.lastKeyTime < C.manualTimeoutMs;
+  const manual = mode === 'race' && !bot.dead && input.lastKeyTime > 0 && t - input.lastKeyTime < C.manualTimeoutMs;
   if (manual !== st.wasManual) { st.wasManual = manual; hud.say(manual ? P.manualOn : P.manualOff); }
 
   const a0 = bot.a;
@@ -181,6 +242,10 @@ function update(t, dt) {
   }
   race.lastSeg = seg;
   hud.race(race.lap, race.started ? t - race.lapStart : 0, race.best);
+  // главный счётчик в панели — по режиму
+  if (race.mode === 'race') hud.lapInfo('Круг', race.laps ? `${Math.min(race.lap + 1, race.laps)}/${race.laps}` : race.lap + 1);
+  else if (race.mode === 'arena') hud.lapInfo('Соперников', rivals.filter(r => !r.out).length);
+  else hud.lapInfo('Осталось', fmt(Math.max(0, race.cleanTime * 1000 - (t - race.t0))).replace(/\.\d$/, ''));
 
   // Мусор: роботы собирают его в контейнер, пока тот не полон. Скрепки ещё и царапают корпус.
   for (const { bot: who, kind } of trash.update(t / 1000, dt, [bot, ...rivals.filter(r => !r.out).map(r => r.bot)])) {
@@ -192,10 +257,11 @@ function update(t, dt) {
     }
     if (who !== bot) {                              // соперник
       who.bin = Math.min(100, who.bin + K.fill); who.binValue += K.value;
+      who.rival.score = (who.rival.score || 0) + K.value;   // очки «Уборки»
       if (K.damage) who.rival.hurt(K.damage);
       continue;
     }
-    bot.bin = Math.min(100, bot.bin + K.fill); bot.binValue += K.value; race.collected++;
+    bot.bin = Math.min(100, bot.bin + K.fill); bot.binValue += K.value; race.collected++; race.score += K.value;
     if (kind === 'coin' && t - (st.lastCoinSay || 0) > 4000) { st.lastCoinSay = t; hud.say(P.coin, 1200); }
     if (K.damage && !combat.absorb(bot, t / 1000)) {
       bot.hp = Math.max(0, bot.hp - K.damage);
@@ -382,7 +448,7 @@ function damage(who, dmg, by, t, kind) {
 // Роботы толкаются; урон игроку — с репликами и полоской ХП, соперникам — через их hurt()
 function bumps(t) {
   const list = rivals.filter(r => !r.out).map(r => r.bot);
-  if (mode === 'race') list.push(bot);
+  if (mode === 'race' || mode === 'done') list.push(bot);
   collideRobots(list, (who, dmg, nx, nz, other) => {
     who.hitN = [nx, nz];
     if (combat.absorb(who, t / 1000)) return;        // губка-щит приняла удар
@@ -393,12 +459,13 @@ function bumps(t) {
 let last = 0;
 function loop(t) {
   const dt = Math.min((t - last) / 1000 || 0, 0.05); last = t;
-  if (mode === 'race') {
+  if (mode === 'race' || mode === 'done') {          // done — экран итогов, а гонка вокруг продолжается
     update(t, dt);
     updateRivals(t, dt);
-    if (mode === 'race') bumps(t);
+    if (mode === 'race' || mode === 'done') bumps(t);
     if (mode === 'race') catchUp(t);
-    if (mode === 'race') bot.render(dt, t);
+    if (mode === 'race') checkEnd(t);
+    if (mode === 'race' || mode === 'done') bot.render(dt, t);
     skids.update(bot);
     smoke.update(dt, bot);
     world.follow(bot, dt);

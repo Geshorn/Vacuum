@@ -16,7 +16,7 @@
 <div id="bar">
   <b>Vacuum Rush</b>
   <span>Место <b id="place">1/1</b></span>
-  <span>Круг <b id="lap">0</b></span>
+  <span><i id="lap-l" style="font-style:normal">Круг</i> <b id="lap">0</b></span>
   <span>Время <b id="time">0:00.0</b></span>
   <span>Лучший <b id="best">—</b></span>
   <span class="sp"></span>
@@ -35,6 +35,15 @@
 <div id="weapon"><span id="w-icon"></span><b id="w-name"></b><small>Пробел</small></div>
 <div id="speed"><b id="spd">0</b><small>км/ч</small></div>
 <div id="menu"></div>
+<div id="results">
+  <div class="m-card o-card r-card">
+    <h1 id="r-title">Финиш!</h1>
+    <p id="r-sub"></p>
+    <table class="r-table"><tbody id="r-rows"></tbody></table>
+    <div class="m-btns"><button id="r-menu">Выбор робота</button><button id="r-again" class="go">Ещё раз</button></div>
+    <div class="m-keys">Enter — ещё раз · Esc — выбор робота</div>
+  </div>
+</div>
 <div id="out">
   <div class="m-card o-card">
     <h1>Выбыл!</h1>

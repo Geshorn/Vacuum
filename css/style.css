@@ -66,6 +66,7 @@ body.in-menu #minimap,body.in-menu #speed,body.in-menu #say,body.in-menu #hint{d
 .m-set{margin-top:clamp(8px,1.4vh,14px);display:flex;flex-direction:column;gap:8px;padding:10px 12px;border-radius:14px;background:rgba(255,255,255,.06)}
 .m-row{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px}
 .m-row>span{opacity:.85}
+.m-hint{font-size:11px;opacity:.6;text-align:right;margin-top:-4px}
 .m-seg{display:flex;gap:4px;padding:3px;border-radius:10px;background:rgba(0,0,0,.25)}
 .m-seg button,.m-step button{font:inherit;font-size:12px;color:#fff;border:0;border-radius:8px;padding:5px 10px;cursor:pointer;background:transparent}
 .m-seg button:hover,.m-step button:hover{background:rgba(255,255,255,.12)}
@@ -94,6 +95,20 @@ body.in-menu #minimap,body.in-menu #speed,body.in-menu #say,body.in-menu #hint{d
 #out{position:fixed;inset:28px 0 0;z-index:55;display:flex;align-items:center;justify-content:center;pointer-events:none;opacity:0;transition:opacity .5s;
   background:radial-gradient(ellipse at 50% 45%,rgba(20,3,12,.15),rgba(20,3,12,.7))}
 #out.on{opacity:1;pointer-events:auto}
+/* Итоги гонки: та же карточка, что «Выбыл», с таблицей мест */
+#results{position:fixed;inset:28px 0 0;z-index:56;display:flex;align-items:center;justify-content:center;pointer-events:none;opacity:0;transition:opacity .5s;
+  background:radial-gradient(ellipse at 50% 45%,rgba(20,3,12,.1),rgba(20,3,12,.65))}
+#results.on{opacity:1;pointer-events:auto}
+#results.on .o-card{transform:none}
+.r-card{min-width:340px}
+.r-table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums;margin:4px 0 6px}
+.r-table td{padding:5px 8px;border-top:1px solid rgba(255,255,255,.08);text-align:left}
+.r-table td:first-child{width:26px;opacity:.7;text-align:right}
+.r-table td:last-child{text-align:right;opacity:.85}
+.r-table tr.me td{color:#ffd27a;font-weight:600}
+.r-table tr.out td{opacity:.45}
+.r-table tr.first td:nth-child(2)::before{content:"🏆 "}
+body.in-menu #results{display:none}
 .o-card{text-align:center;padding:22px 18px 16px;transform:scale(.9);transition:transform .5s}
 #out.on .o-card{transform:none}
 .o-card h1{margin:0;font-size:38px;letter-spacing:1px;background:linear-gradient(90deg,#ffd166,#ff3b4e);-webkit-background-clip:text;background-clip:text;color:transparent}

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { ROBOTS } from './robots.js';
 import { derive, spinAll } from './robot.js';
 import { buildModel } from './models.js';
-import { settings, saveSettings, DIFFICULTY, RIVALS_RANGE } from './settings.js';
+import { settings, saveSettings, DIFFICULTY, RIVALS_RANGE, MODES, LAPS, CLEAN_TIME } from './settings.js';
 
 // Меню выбора робота: сетка портретов, крутящаяся 3D-модель и характеристики полосками.
 const LIST = Object.values(ROBOTS);
@@ -62,6 +62,10 @@ export class Menu {
         <h1>Выбери робота</h1>
         <div class="m-grid" id="m-grid"></div>
         <div class="m-set">
+          <div class="m-row"><span>Режим</span><div class="m-seg" id="m-mode"></div></div>
+          <div class="m-row" id="m-laps-row"><span>Круги</span><div class="m-seg" id="m-laps"></div></div>
+          <div class="m-row" id="m-time-row"><span>Время</span><div class="m-seg" id="m-time"></div></div>
+          <div class="m-hint" id="m-mode-hint"></div>
           <div class="m-row"><span>Сложность</span><div class="m-seg" id="m-diff"></div></div>
           <div class="m-row"><span>Соперники</span><div class="m-step"><button id="m-rminus">−</button><b id="m-rcount"></b><button id="m-rplus">+</button></div></div>
         </div>
@@ -91,6 +95,14 @@ export class Menu {
     const seg = this.el.querySelector('#m-diff');
     seg.innerHTML = Object.entries(DIFFICULTY).map(([k, d]) => `<button data-k="${k}">${d.name}</button>`).join('');
     seg.onclick = e => { const k = e.target.dataset.k; if (k) this.setDifficulty(k); };
+    const segOf = (id, items, key) => {
+      const el = this.el.querySelector(id);
+      el.innerHTML = items.map(([v, label]) => `<button data-v="${v}">${label}</button>`).join('');
+      el.onclick = e => { const v = e.target.dataset.v; if (v == null) return; settings[key] = isNaN(+v) ? v : +v; saveSettings(); this.refreshSettings(); };
+    };
+    segOf('#m-mode', Object.entries(MODES).map(([k, m]) => [k, m.name]), 'mode');
+    segOf('#m-laps', LAPS.map(n => [n, n ? n : '∞']), 'laps');
+    segOf('#m-time', CLEAN_TIME.map(s => [s, s / 60 + ' мин']), 'cleanTime');
     this.el.querySelector('#m-rminus').onclick = () => this.setRivals(settings.rivals - 1);
     this.el.querySelector('#m-rplus').onclick = () => this.setRivals(settings.rivals + 1);
     this.refreshSettings();
@@ -101,6 +113,11 @@ export class Menu {
 
   refreshSettings() {
     [...this.el.querySelectorAll('#m-diff button')].forEach(b => b.classList.toggle('on', b.dataset.k === settings.difficulty));
+    for (const [id, key] of [['#m-mode', 'mode'], ['#m-laps', 'laps'], ['#m-time', 'cleanTime']])
+      [...this.el.querySelectorAll(id + ' button')].forEach(b => b.classList.toggle('on', String(settings[key]) === b.dataset.v));
+    this.el.querySelector('#m-laps-row').style.display = settings.mode === 'race' ? '' : 'none';
+    this.el.querySelector('#m-time-row').style.display = settings.mode === 'clean' ? '' : 'none';
+    this.el.querySelector('#m-mode-hint').textContent = MODES[settings.mode].hint;
     this.el.querySelector('#m-rcount').textContent = settings.rivals === 0 ? 'нет' : settings.rivals;
   }
 

@@ -10,8 +10,17 @@ export const DIFFICULTY = {
 
 export const RIVALS_RANGE = [0, 7];   // сколько соперников можно выбрать
 
+// Режимы игры
+export const MODES = {
+  race:  { name: 'Гонка', hint: 'Кто первым проедет все круги' },
+  arena: { name: 'Арена', hint: 'Побеждает последний уцелевший' },
+  clean: { name: 'Уборка', hint: 'Кто больше соберёт мусора за время' },
+};
+export const LAPS = [3, 5, 10, 0];          // 0 — без конца
+export const CLEAN_TIME = [60, 120, 180];   // секунды
+
 const KEY = 'vacuum-rush-settings';
-const DEFAULTS = { difficulty: 'medium', rivals: 4 };
+const DEFAULTS = { difficulty: 'medium', rivals: 4, mode: 'race', laps: 3, cleanTime: 120 };
 
 export const settings = { ...DEFAULTS, ...load() };
 

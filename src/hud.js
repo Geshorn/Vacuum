@@ -109,6 +109,18 @@ export const hud = {
     D.say.style.transform = `translate(${x}px,${y}px) translate(-50%,-100%)`;
   },
 
+  // Главный счётчик в панели: «Круг 2/5», «Осталось 1:23», «Соперников 3»
+  lapInfo(label, value) { $('lap-l').textContent = label; D.lap.textContent = value; },
+
+  // Итоги: rows — [{ name, me, out, info }] по местам
+  onResults(again, menu) { $('r-again').onclick = again; $('r-menu').onclick = menu; },
+  showResults({ title, sub, rows }) {
+    $('r-title').textContent = title; $('r-sub').textContent = sub;
+    $('r-rows').innerHTML = rows.map((e, i) => `<tr class="${e.me ? 'me' : ''}${e.out ? ' out' : ''}${i === 0 ? ' first' : ''}"><td>${i + 1}</td><td>${e.name}${e.me ? ' (ты)' : ''}</td><td>${e.info}</td></tr>`).join('');
+    $('results').classList.add('on'); this.hideHint();
+  },
+  hideResults() { $('results').classList.remove('on'); },
+
   // Экран «Выбыл» после взрыва
   onOut(again, menu) { $('o-again').onclick = again; $('o-menu').onclick = menu; },
   showOut({ robot, laps, best, collected = 0, earned = 0, place = '—', kills = 0 }) {
