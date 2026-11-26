@@ -87,7 +87,9 @@ body.in-menu #minimap,body.in-menu #speed,body.in-menu #say,body.in-menu #hint{d
 #out.on .o-card{transform:none}
 .o-card h1{margin:0;font-size:38px;letter-spacing:1px;background:linear-gradient(90deg,#ffd166,#ff3b4e);-webkit-background-clip:text;background-clip:text;color:transparent}
 .o-card p{margin:6px 0 14px;opacity:.8}
-.o-stats{display:flex;justify-content:center;gap:22px;font-size:14px;font-variant-numeric:tabular-nums}
+.o-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 18px;font-size:13px;font-variant-numeric:tabular-nums;
+  padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.06)}
+.o-stats span{white-space:nowrap;opacity:.85}
 .o-stats b{display:block;font-size:22px;margin-top:2px}
 .o-card .m-keys{max-width:none;margin-top:12px}
 
