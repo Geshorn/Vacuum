@@ -8,6 +8,7 @@ export const WEAPONS = {
   soap:   { name: 'Моющее средство', icon: '🧴' },
   trash:  { name: 'Залп мусором',    icon: '🗑️' },
   sponge: { name: 'Губка-щит',       icon: '🧽' },
+  banana: { name: 'Банановая кожура', icon: '🍌' },
 };
 
 function boxTexture() {

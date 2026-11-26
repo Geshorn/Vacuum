@@ -299,6 +299,7 @@ function damage(who, dmg, by, t, kind) {
   }
   if (mode !== 'race') return;
   if (kind === 'soap') { hud.say(P.slip, 1400); return; }
+  if (kind === 'banana') { hud.say(P.banana, 1400); return; }
   who.hp = Math.max(0, who.hp - dmg);
   if (dmg > 3) who.dent(dmg);
   who.scratch(); hud.hurt();

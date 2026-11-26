@@ -14,6 +14,7 @@ export class Combat {
   constructor(scene, track) {
     this.scene = scene; this.track = track;
     this.puddles = []; this.pellets = []; this.queue = [];
+    this.extras = [];   // прочие объекты оружия: { mesh, update(now, dt, bots, onHit) → жив ли ещё }
     this.group = new THREE.Group(); scene.add(this.group);
     this.foamTex = foamTexture();
     this.pelletGeo = new THREE.DodecahedronGeometry(0.45, 0);
@@ -21,8 +22,39 @@ export class Combat {
   }
 
   clear() {
-    for (const p of [...this.puddles, ...this.pellets]) this.group.remove(p.mesh);
-    this.puddles = []; this.pellets = []; this.queue = [];
+    for (const p of [...this.puddles, ...this.pellets, ...this.extras]) this.group.remove(p.mesh);
+    this.puddles = []; this.pellets = []; this.queue = []; this.extras = [];
+  }
+
+  // Общая проверка попадания по роботу (кроме владельца): круг радиуса робота + r
+  touching(x, z, r, bots, except) {
+    for (const b of bots) {
+      if (b === except || !b.mesh.visible) continue;
+      const R = b.s.radius + r;
+      if ((b.x - x) ** 2 + (b.z - z) ** 2 < R * R) return b;
+    }
+    return null;
+  }
+
+  // 🍌 Банановая кожура позади: кто наедет, того разворачивает на 360° и сильно тормозит
+  dropPeel(bot, now) {
+    const fx = Math.cos(bot.a), fz = Math.sin(bot.a), d = bot.s.radius + 2;
+    const x = bot.x - fx * d, z = bot.z - fz * d;
+    const m = new THREE.Group(); m.position.set(x, 0, z); m.rotation.y = Math.random() * 6; this.group.add(m);
+    const yel = new THREE.MeshStandardMaterial({ color: '#f2cf3a', roughness: 0.6 }), tip = new THREE.MeshStandardMaterial({ color: '#5a4126' });
+    for (let i = 0; i < 3; i++) {
+      const p = new THREE.Mesh(new THREE.CapsuleGeometry(0.45, 2.2, 4, 8), yel), a = i / 3 * Math.PI * 2 + 0.3;
+      p.rotation.set(Math.PI / 2, 0, a); p.scale.set(1, 1, 0.35); p.position.set(Math.cos(a + Math.PI / 2) * 1.1, 0.18, Math.sin(a + Math.PI / 2) * 1.1); p.castShadow = true; m.add(p);
+    }
+    const t = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.8, 8), tip); t.position.y = 0.4; m.add(t);
+    const born = now, until = now + W().banana.life;
+    this.extras.push({ mesh: m, update: (now, dt, bots, onHit) => {
+      if (now > until) return false;
+      const b = this.touching(x, z, 0.9, bots, now - born < 1 ? bot : null);
+      if (!b) return true;
+      if (!this.absorb(b, now)) { b.twirl = Math.PI * 2; b.v *= W().banana.slow; onHit(b, 0, bot, 'banana'); }
+      return false;                                  // кожура использована
+    } });
   }
 
   // Применить оружие из слота. Возвращает false, если не получилось (например, пустой контейнер для залпа).
@@ -41,6 +73,8 @@ export class Combat {
       const n = Math.round(T.time * T.rate);
       for (let k = 0; k < n; k++) this.queue.push({ bot, at: now + k / T.rate });
       bot.firingUntil = now + T.time;
+    } else if (w === 'banana') {
+      this.dropPeel(bot, now);
     } else if (w === 'sponge') {
       bot.shieldUntil = now + W().sponge.time; this.showShield(bot, true);
     }
@@ -125,7 +159,10 @@ export class Combat {
       const sl = b.slipUntil > now;
       b.gripMul = sl ? 0.08 : 1;
       if (sl) { b.a += b.spin * dt; b.spin *= Math.exp(-1.5 * dt); }
+      // разворот на банане: полный оборот за ~0.7 с
+      if (b.twirl > 0) { const d = Math.min(b.twirl, 9 * dt); b.a += d; b.twirl -= d; b.gripMul = 0.2; }
     }
+    this.extras = this.extras.filter(e => { const alive = e.update(now, dt, bots, onHit); if (!alive) this.group.remove(e.mesh); return alive; });
 
     // снаряды мусора: летят прямо, гаснут у стен
     const tr = this.track;
@@ -172,7 +209,7 @@ export class Combat {
     const others = bots.filter(o => o !== b && o.mesh.visible).map(rel);
     const A = C.rivals.aggro;
     let go = false;
-    if (w === 'soap') go = others.some(o => o.dot < -0.3 && o.d < A.soapRange) || held > A.maxHold;
+    if (w === 'soap' || w === 'banana') go = others.some(o => o.dot < -0.3 && o.d < A.soapRange) || held > A.maxHold;
     if (w === 'trash') go = b.bin >= W().trash.cost && others.some(o => o.dot > 0.6 && o.d < A.shootRange);
     if (w === 'sponge') go = b.hp < b.s.hp * 0.8 || others.some(o => o.d < 14) || held > A.maxHold;
     if (go && held > A.react && this.fire(b, now)) { rival.gotAt = 0; return; }
