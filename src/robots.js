@@ -22,7 +22,7 @@
 
    Ориентиры баланса (пылесос = эталон):
      accelTime ~ 1.0 … 2.5 с — лёгкие стартуют резче
-     hp        ~ 40 … 400   — примерно 100 × масса
+     hp        ~ 60 … 400   — тяжёлые ~100 × масса, лёгким и средним добавлен запас
    ===================================================================== */
 
 export const MAX_SPEED = 24;   // ед/с, одна для всех
@@ -46,16 +46,16 @@ export function defaultsFor(mass) {
 // Паспорта. Колонки: масса, время разгона до максимума (с), ХП + особенности.
 const LIST = {
   // ── Лёгкие: резкий старт и вёрткость, но хрупкие ──
-  remote:     { name: 'Пульт',             mass: 0.4, accelTime: 1.0,  hp: 40,  color: '#3a3a44' },                          // самый резкий
-  mouse:      { name: 'Мышка',             mass: 0.5, accelTime: 1.1,  hp: 50,  color: '#d8dde6', grip: 12 },                // цепкая
-  fan:        { name: 'Вентилятор',        mass: 0.7, accelTime: 1.15, hp: 70,  color: '#9fe3ff', bounce: 0.6 },             // упругий
-  lamp:       { name: 'Настольная лампа',  mass: 0.8, accelTime: 1.2,  hp: 75,  color: '#ffd166', turn: 3.8 },               // самая вёрткая
+  remote:     { name: 'Пульт',             mass: 0.4, accelTime: 1.0,  hp: 60,  color: '#3a3a44' },                          // самый резкий
+  mouse:      { name: 'Мышка',             mass: 0.5, accelTime: 1.1,  hp: 70,  color: '#d8dde6', grip: 12 },                // цепкая
+  fan:        { name: 'Вентилятор',        mass: 0.7, accelTime: 1.15, hp: 85,  color: '#9fe3ff', bounce: 0.6 },             // упругий
+  lamp:       { name: 'Настольная лампа',  mass: 0.8, accelTime: 1.2,  hp: 90,  color: '#ffd166', turn: 3.8 },               // самая вёрткая
 
   // ── Средние: сбалансированные ──
-  vacuum:     { name: 'Пылесос',           mass: 1.0, accelTime: 1.33, hp: 100 },                                            // эталон
-  blender:    { name: 'Блендер',           mass: 1.1, accelTime: 1.2,  hp: 100, color: '#ff5b3a' },                          // резкий старт
-  mop:        { name: 'Робот-мойщик',      mass: 1.3, accelTime: 1.5,  hp: 130, color: '#5db2ff', grip: 8, slideGrip: 1.5 }, // скользкий
-  iron:       { name: 'Утюг',              mass: 1.5, accelTime: 1.4,  hp: 125, color: '#b57bff', slideGrip: 3 },            // тяжёлый, но резвый
+  vacuum:     { name: 'Пылесос',           mass: 1.0, accelTime: 1.33, hp: 120 },                                            // эталон
+  blender:    { name: 'Блендер',           mass: 1.1, accelTime: 1.2,  hp: 120, color: '#ff5b3a' },                          // резкий старт
+  mop:        { name: 'Робот-мойщик',      mass: 1.3, accelTime: 1.5,  hp: 145, color: '#5db2ff', grip: 8, slideGrip: 1.5 }, // скользкий
+  iron:       { name: 'Утюг',              mass: 1.5, accelTime: 1.4,  hp: 140, color: '#b57bff', slideGrip: 3 },            // тяжёлый, но резвый
 
   // ── Тяжёлые: медленно разгоняются, много ХП, расталкивают лёгких ──
   mower:      { name: 'Газонокосилка',     mass: 1.8, accelTime: 1.8,  hp: 180, color: '#4cd964', grip: 12 },                // цепкая

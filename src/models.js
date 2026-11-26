@@ -36,5 +36,5 @@ export function buildModel(spec) {
   }
 
   g.traverse(o => { if (o.isMesh && o.material !== eye) o.castShadow = true; });
-  return { group: g, eyeMat: eye, spinners };
+  return { group: g, eyeMat: eye, spinners, shellMat: shell };
 }

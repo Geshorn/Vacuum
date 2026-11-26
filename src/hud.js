@@ -2,7 +2,7 @@ import { fmtTime, pick } from './util.js';
 
 const $ = id => document.getElementById(id);
 const D = { lap: $('lap'), time: $('time'), best: $('best'), batt: $('batt'), fill: $('battfill'), pct: $('battpct'),
-  clock: $('clock'), rname: $('rname'), hpfill: $('hpfill'), hpval: $('hpval'), say: $('say'), hint: $('hint'), map: $('minimap'), spd: $('spd') };
+  clock: $('clock'), rname: $('rname'), hpfill: $('hpfill'), hpval: $('hpval'), hp: $('hp'),say: $('say'), hint: $('hint'), map: $('minimap'), spd: $('spd') };
 
 export const hud = {
   // Мини-карта: трасса вписывается в canvas один раз, затем рисуем точку робота
@@ -52,9 +52,16 @@ export const hud = {
 
   robot(name) { D.rname.textContent = name; },
 
-  health(hp, max) {
+  health(hp, max, repairing = false) {
     D.hpfill.style.width = Math.max(0, hp / max * 100) + '%';
     D.hpval.textContent = Math.ceil(hp) + ' ХП';
+    D.hp.classList.toggle('low', hp < max * 0.3);
+    D.hp.classList.toggle('fix', repairing);
+  },
+
+  // Встряхнуть полоску ХП при ударе
+  hurt() {
+    D.hp.classList.remove('hit'); void D.hp.offsetWidth; D.hp.classList.add('hit');
   },
 
   speed(v) { D.spd.textContent = Math.round(v * 6); },   // условные «км/ч»
@@ -73,6 +80,15 @@ export const hud = {
     const x = (v.x + 1) / 2 * innerWidth, y = (1 - v.y) / 2 * innerHeight;
     D.say.style.transform = `translate(${x}px,${y}px) translate(-50%,-100%)`;
   },
+
+  // Экран «Выбыл» после взрыва
+  onOut(again, menu) { $('o-again').onclick = again; $('o-menu').onclick = menu; },
+  showOut({ robot, laps, best }) {
+    $('o-robot').textContent = robot + ' взорвался и выбывает из гонки';
+    $('o-laps').textContent = laps; $('o-best').textContent = best ? fmtTime(best) : '—';
+    $('out').classList.add('on'); this.hideHint();
+  },
+  hideOut() { $('out').classList.remove('on'); },
 
   hideHint() { D.hint.style.opacity = 0; },
   showHint() { D.hint.style.opacity = 1; },

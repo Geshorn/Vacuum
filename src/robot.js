@@ -1,6 +1,15 @@
 import { C } from './config.js';
 import { clamp, approach, wrap } from './util.js';
 import { buildModel } from './models.js';
+import * as THREE from 'three';
+
+const DENT_GEO = new THREE.SphereGeometry(1, 12, 8);
+const DENT_MAT = new THREE.MeshStandardMaterial({ color: '#3b3238', roughness: 0.9, metalness: 0.3 });
+const SCORCH = new THREE.Color('#2a2026');
+const SCRATCH_GEO = new THREE.BoxGeometry(1, 1, 1);
+// без освещения — царапины одинаково контрастны с любой стороны робота
+const SCRATCH_LIGHT = new THREE.MeshBasicMaterial({ color: '#ffffff' });
+const SCRATCH_DARK = new THREE.MeshBasicMaterial({ color: '#0a0709' });
 
 // Вращение колёс, лопастей и щёток: от скорости робота плюс постоянное «холостое» вращение
 export function spinAll(spinners, v, dt) {
@@ -29,8 +38,10 @@ export class Robot {
     this.spec = spec;
     this.s = derive(spec);
     const m = buildModel(spec);   // модель — см. models.js
-    this.hp = this.s.hp;   // текущее здоровье; урон пока не наносится — это задел под бои
+    this.hp = this.s.hp;   // текущее здоровье: падает от ударов о стены (main.js), чинится на пит-стопе
     this.mesh = m.group; this.eyeMat = m.eyeMat; this.spinners = m.spinners;
+    this.shellMat = m.shellMat; this.shellColor = m.shellMat.color.clone();
+    this.dents = []; this.scratches = [];
     this.mesh.rotation.order = 'YXZ';   // крен — вокруг собственной продольной оси
     scene.add(this.mesh);
     // Состояние: позиция на плоскости XZ, угол, скорость вдоль носа (v) и боком (lat)
@@ -99,9 +110,63 @@ export class Robot {
     this.inLane = lane; this.latPos = d;
     const m = track.nrm[this.seg];
     let hit = 0;
-    if (d > hi) { this.x -= m.x * (d - hi); this.z -= m.z * (d - hi); hit = this.bounce(-m.x, -m.z, s.restitution); }
-    else if (d < lo) { this.x += m.x * (lo - d); this.z += m.z * (lo - d); hit = this.bounce(m.x, m.z, s.restitution); }
+    if (d > hi) { this.x -= m.x * (d - hi); this.z -= m.z * (d - hi); hit = this.bounce(-m.x, -m.z, s.restitution); this.hitN = [-m.x, -m.z]; }
+    else if (d < lo) { this.x += m.x * (lo - d); this.z += m.z * (lo - d); hit = this.bounce(m.x, m.z, s.restitution); this.hitN = [m.x, m.z]; }
     return hit;
+  }
+
+  // Вмятина на корпусе с той стороны, которой робот ударился (hitN — нормаль стены, от неё к роботу)
+  dent(dmg) {
+    if (!this.hitN || this.dents.length >= 14) return;
+    const [nx, nz] = this.hitN, dx = -nx, dz = -nz, a = this.a;
+    const lx = dx * Math.cos(a) + dz * Math.sin(a), lz = -dx * Math.sin(a) + dz * Math.cos(a);   // в координатах модели
+    const ang = Math.atan2(lz, lx) + (Math.random() - 0.5) * 0.6, R = this.s.radius;
+    const size = clamp(0.25 + dmg * 0.02, 0.25, 0.6);
+    const m = new THREE.Mesh(DENT_GEO, DENT_MAT);
+    m.scale.set(0.12, size * 0.7, size);
+    m.position.set(Math.cos(ang) * R * 1.0, 0.28 + Math.random() * 0.2, Math.sin(ang) * R * 1.0);
+    m.rotation.y = -ang;
+    this.mesh.add(m); this.dents.push(m);
+  }
+
+  // Царапина на корпусе: светлая полоска (видно металл под краской) с той стороны, которой робот трётся о стену.
+  // Тянется вдоль борта, с небольшим наклоном; часть царапин заходит на верх корпуса.
+  scratch() {
+    if (!this.hitN || this.scratches.length >= 40) return;
+    const [nx, nz] = this.hitN, dx = -nx, dz = -nz, a = this.a;
+    const lx = dx * Math.cos(a) + dz * Math.sin(a), lz = -dx * Math.sin(a) + dz * Math.cos(a);
+    const ang = Math.atan2(lz, lx) + (Math.random() - 0.5) * 0.9, R = this.s.radius;
+    const len = 0.5 + Math.random() * 0.6;
+    // цвет — контрастный корпусу: на светлом роботе в основном тёмные царапины, на тёмном — светлые
+    const light = this.shellColor.getHSL({}).l < 0.5;
+    const m = new THREE.Mesh(SCRATCH_GEO, Math.random() < 0.9 ? (light ? SCRATCH_LIGHT : SCRATCH_DARK) : (light ? SCRATCH_DARK : SCRATCH_LIGHT));
+    if (Math.random() < 0.25) {      // на крышке
+      const r = R * (0.82 + Math.random() * 0.15);
+      m.position.set(Math.cos(ang) * r, 0.66, Math.sin(ang) * r);
+      m.rotation.set(0, -ang - Math.PI / 2 + (Math.random() - 0.5) * 0.6, 0);
+      m.scale.set(len, 0.03, 0.11);
+    } else {                         // на борту
+      m.position.set(Math.cos(ang) * R * 1.005, 0.2 + Math.random() * 0.36, Math.sin(ang) * R * 1.005);
+      m.rotation.set(0, -ang - Math.PI / 2, (Math.random() - 0.5) * 0.5);
+      m.scale.set(len, 0.08, 0.05);
+    }
+    this.mesh.add(m); this.scratches.push(m);
+  }
+
+  // Состояние корпуса по ХП: темнеет от повреждений
+  updateWear() {
+    const wear = 1 - this.hp / this.s.hp;
+    this.shellMat.color.copy(this.shellColor).lerp(SCORCH, clamp(wear * 0.6, 0, 0.6));
+  }
+
+  // Убрать одну случайную вмятину или царапину (ремонт на пит-стопе); false — убирать нечего
+  removeMark() {
+    const total = this.dents.length + this.scratches.length;
+    if (!total) return false;
+    const list = Math.random() * total < this.dents.length ? this.dents : this.scratches;
+    const [m] = list.splice(Math.floor(Math.random() * list.length), 1);
+    this.mesh.remove(m);
+    return true;
   }
 
   render(dt, t) {
@@ -110,6 +175,7 @@ export class Robot {
     // лёгкий крен в заносе
     this.mesh.rotation.x = clamp(-this.lat * 0.012, -0.15, 0.15);
     spinAll(this.spinners, this.v, dt);
+    this.updateWear();
     this.eyeMat.color.set(this.dead ? '#333' : this.bat < 20 ? (Math.floor(t / 300) % 2 ? '#ff3b30' : '#551010') : this.drifting ? '#ffcc00' : '#6ef0ff');
   }
 }
