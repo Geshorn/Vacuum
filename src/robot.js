@@ -85,7 +85,12 @@ export class Robot {
     const diff = wrap(Math.atan2(pz - this.z, px - this.x) - this.a);
     this.a += clamp(diff, -C.autoTurn * dt, C.autoTurn * dt);
     this.w = 0;
-    const want = C.autoSpeed * speedMul * this.s.maxSpeed * (Math.abs(diff) > 0.5 ? 0.6 : 1);
+    // в повороты — плавно: чем круче поворот впереди, тем меньше газ (до −45%); сильно сбился с курса — тоже сбавляем
+    const a1 = track.t[track.at(this.seg + 4)], a2 = track.t[track.at(this.seg + 22)];
+    const bend = Math.acos(clamp(a1.x * a2.x + a1.z * a2.z, -1, 1));
+    const corner = 1 - clamp((bend - 0.25) / 0.9, 0, 1) * 0.45;
+    const off = Math.abs(diff) > 0.6 ? 0.7 : 1;
+    const want = C.autoSpeed * speedMul * this.s.maxSpeed * Math.min(corner, off);
     this.v = approach(this.v, want, this.s.accel, dt);
   }
 

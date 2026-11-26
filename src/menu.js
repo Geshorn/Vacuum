@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { ROBOTS } from './robots.js';
 import { derive, spinAll } from './robot.js';
 import { buildModel } from './models.js';
+import { settings, saveSettings, DIFFICULTY, RIVALS_RANGE } from './settings.js';
 
 // Меню выбора робота: сетка портретов, крутящаяся 3D-модель и характеристики полосками.
 const LIST = Object.values(ROBOTS);
@@ -60,7 +61,11 @@ export class Menu {
       <div class="m-panel">
         <h1>Выбери робота</h1>
         <div class="m-grid" id="m-grid"></div>
-        <div class="m-keys">Стрелки / WASD — выбор · Enter — поехали · R — случайный</div>
+        <div class="m-set">
+          <div class="m-row"><span>Сложность</span><div class="m-seg" id="m-diff"></div></div>
+          <div class="m-row"><span>Соперники</span><div class="m-step"><button id="m-rminus">−</button><b id="m-rcount"></b><button id="m-rplus">+</button></div></div>
+        </div>
+        <div class="m-keys">Стрелки / WASD — выбор · Enter — поехали · R — случайный · 1/2/3 — сложность · −/+ — соперники</div>
       </div>
       <div class="m-card">
         <canvas id="m-view" width="420" height="300"></canvas>
@@ -78,6 +83,25 @@ export class Menu {
     this.el.querySelector('#m-rand').onclick = () => this.random();
     addEventListener('keydown', e => this.onKey(e));
     this.index = 0;
+    this.buildSettings();
+  }
+
+  // Настройки гонки: сложность (3 кнопки) и число соперников (−/+); сохраняются сразу
+  buildSettings() {
+    const seg = this.el.querySelector('#m-diff');
+    seg.innerHTML = Object.entries(DIFFICULTY).map(([k, d]) => `<button data-k="${k}">${d.name}</button>`).join('');
+    seg.onclick = e => { const k = e.target.dataset.k; if (k) this.setDifficulty(k); };
+    this.el.querySelector('#m-rminus').onclick = () => this.setRivals(settings.rivals - 1);
+    this.el.querySelector('#m-rplus').onclick = () => this.setRivals(settings.rivals + 1);
+    this.refreshSettings();
+  }
+
+  setDifficulty(k) { settings.difficulty = k; saveSettings(); this.refreshSettings(); }
+  setRivals(n) { settings.rivals = Math.max(RIVALS_RANGE[0], Math.min(RIVALS_RANGE[1], n)); saveSettings(); this.refreshSettings(); }
+
+  refreshSettings() {
+    [...this.el.querySelectorAll('#m-diff button')].forEach(b => b.classList.toggle('on', b.dataset.k === settings.difficulty));
+    this.el.querySelector('#m-rcount').textContent = settings.rivals === 0 ? 'нет' : settings.rivals;
   }
 
   buildPortraits() {
@@ -148,6 +172,9 @@ export class Menu {
     const c = e.code;
     if (c === 'Enter' || c === 'Space') { e.preventDefault(); this.pick(); }
     else if (c === 'KeyR') this.random();
+    else if (c === 'Digit1' || c === 'Digit2' || c === 'Digit3') this.setDifficulty(Object.keys(DIFFICULTY)[+c.slice(-1) - 1]);
+    else if (c === 'Minus' || c === 'NumpadSubtract') this.setRivals(settings.rivals - 1);
+    else if (c === 'Equal' || c === 'NumpadAdd') this.setRivals(settings.rivals + 1);
     else if (c === 'ArrowLeft' || c === 'KeyA') this.select(this.index - 1);
     else if (c === 'ArrowRight' || c === 'KeyD') this.select(this.index + 1);
     else if (c === 'ArrowUp' || c === 'KeyW') this.select(this.index - COLS);

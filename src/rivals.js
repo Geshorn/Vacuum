@@ -2,6 +2,7 @@ import { C } from './config.js';
 import { Robot } from './robot.js';
 import { Smoke } from './smoke.js';
 import { Explosion } from './explosion.js';
+import { diff } from './settings.js';
 
 /* Соперники: роботы на автопилоте. Едут каждый со своей скоростью и «своей» полосой (слегка виляют),
    собирают мусор, тратят батарею, бьются о стены, заезжают в боксы (у них зарядка, сдача мусора и ремонт
@@ -14,7 +15,7 @@ export class Rival {
     this.bot = new Robot(scene, spec);
     this.bot.rival = this;
     this.smoke = new Smoke(scene);
-    this.speedMul = rnd(...C.rivals.speed) / C.autoSpeed;
+    this.speedMul = rnd(...diff().speed) / C.autoSpeed;   // скорость — по выбранной в меню сложности
     this.lane = rnd(-1, 1); this.laneT = rnd(0, 6);
     this.pitting = false; this.pitCommit = false;
     this.out = false; this.boom = null;

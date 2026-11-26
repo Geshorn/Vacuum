@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 import { C } from './config.js';
+import { diff } from './settings.js';
+// меткость: у снарядов соперников доводка умножается на меткость выбранной сложности, у игрока — как есть
+const aim = b => (b && b.rival ? diff().aim : 1);
 
 /* Оружие роботов.
    🧴 Моющее средство — лужа пены позади робота: кто наедет, того закручивает и почти лишает сцепления.
@@ -64,7 +67,8 @@ export class Combat {
       if (tg) {                                      // доворот к цели
         const want = Math.atan2(tg.z - st.z, tg.x - st.x);
         let da = Math.atan2(Math.sin(want - st.a), Math.cos(want - st.a));
-        st.a += Math.max(-P.turn * dt, Math.min(P.turn * dt, da));
+        const turn = P.turn * aim(bot);
+        st.a += Math.max(-turn * dt, Math.min(turn * dt, da));
       }
       st.x += Math.cos(st.a) * P.speed * dt; st.z += Math.sin(st.a) * P.speed * dt;
       m.position.set(st.x, 3, st.z); m.rotation.y += dt * 6; m.rotation.x += dt * 4;
@@ -159,7 +163,8 @@ export class Combat {
       if (tg) {
         const cur = Math.atan2(st.vz, st.vx), want = Math.atan2(tg.z - st.z, tg.x - st.x);
         let da = Math.atan2(Math.sin(want - cur), Math.cos(want - cur));
-        da = Math.max(-P.homing * dt, Math.min(P.homing * dt, da));
+        const hom = P.homing * aim(bot);
+        da = Math.max(-hom * dt, Math.min(hom * dt, da));
         st.vx = Math.cos(cur + da) * sp0; st.vz = Math.sin(cur + da) * sp0;
       }
       st.x += st.vx * dt; st.z += st.vz * dt;
@@ -410,7 +415,8 @@ export class Combat {
       if (tg) {
         const sp = Math.hypot(p.vx, p.vz), cur = Math.atan2(p.vz, p.vx), want = Math.atan2(tg.z - m.position.z, tg.x - m.position.x);
         let da = Math.atan2(Math.sin(want - cur), Math.cos(want - cur));
-        da = Math.max(-W().trash.homing * dt, Math.min(W().trash.homing * dt, da));
+        const hom = W().trash.homing * aim(p.owner);
+        da = Math.max(-hom * dt, Math.min(hom * dt, da));
         p.vx = Math.cos(cur + da) * sp; p.vz = Math.sin(cur + da) * sp;
       }
       m.position.x += p.vx * dt; m.position.z += p.vz * dt; m.rotation.x += dt * 9; m.rotation.y += dt * 7;
@@ -476,7 +482,7 @@ export class Combat {
     if (w === 'rocket') go = others.some(o => o.dot > 0.2 && o.d < 90) || held > A.maxHold;
     if (w === 'cap') go = others.some(o => o.dot > 0.7 && o.d < 55) || held > A.maxHold;
     if (w === 'sponge') go = b.hp < b.s.hp * 0.8 || others.some(o => o.d < 14) || held > A.maxHold;
-    if (go && held > A.react && this.fire(b, now)) { rival.gotAt = 0; return; }
+    if (go && held > diff().react && this.fire(b, now)) { rival.gotAt = 0; return; }   // скорость реакции — по сложности
     // оружие, которым никак не воспользоваться (залп без мусора), выбрасываем — чтобы взять новое из коробок
     if (held > A.maxHold + 2) { b.weapon = null; rival.gotAt = 0; }
   }
@@ -488,7 +494,7 @@ export class Combat {
     const b = rival.bot, D = C.rivals.dodge, tr = this.track;
     if (b.inLane) return null;
     const fx = Math.cos(b.a), fz = Math.sin(b.a), seen = rival.seen || (rival.seen = new WeakMap());
-    const notices = key => { if (!seen.has(key)) seen.set(key, Math.random() < D.notice); return seen.get(key); };
+    const notices = key => { if (!seen.has(key)) seen.set(key, Math.random() < diff().notice); return seen.get(key); };   // по сложности
     // летящие пробки: если приближается и пройдёт рядом — шаг в сторону
     for (const e of this.extras) {
       const s = e.missile; if (!s || e.owner === b || !notices(e)) continue;

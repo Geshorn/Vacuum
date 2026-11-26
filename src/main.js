@@ -16,6 +16,7 @@ import { Rival } from './rivals.js';
 import { collideRobots } from './collide.js';
 import { Pickups, WEAPONS } from './pickups.js';
 import { Combat } from './weapons.js';
+import { settings } from './settings.js';
 
 const world = new World(document.getElementById('game'));
 const track = new Track(world.scene);
@@ -43,7 +44,7 @@ function startRace(id) {
   race = { lap: 0, lapStart: 0, best: 0, started: false, lastSeg: s0, tokens: 0, earned: 0, collected: 0, crossings: 0 };
   for (const r of rivals) r.dispose();
   const pool = Object.keys(ROBOTS).filter(k => k !== id).sort(() => Math.random() - 0.5);
-  rivals = pool.slice(0, C.rivals.count).map((rid, k) => {
+  rivals = pool.slice(0, settings.rivals).map((rid, k) => {
     const r = new Rival(world.scene, ROBOTS[rid], track), [s, l] = slot(k < 2 ? k : k + 1);
     r.place(s, l); return r;
   });

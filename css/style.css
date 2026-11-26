@@ -62,6 +62,17 @@ body.in-menu #minimap,body.in-menu #speed,body.in-menu #say,body.in-menu #hint{d
 .m-cell.on{border-color:#ff8a5c;box-shadow:0 0 0 2px rgba(255,138,92,.35),0 0 22px rgba(255,90,60,.55);transform:scale(1.05)}
 .m-cell .w{position:absolute;right:6px;top:6px;width:9px;height:9px;border-radius:50%}
 .m-cell .wЛ{background:#6ef0ff}.m-cell .wС{background:#ffcc00}.m-cell .wТ{background:#ff3b4e}
+/* Настройки гонки под сеткой роботов */
+.m-set{margin-top:clamp(8px,1.4vh,14px);display:flex;flex-direction:column;gap:8px;padding:10px 12px;border-radius:14px;background:rgba(255,255,255,.06)}
+.m-row{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px}
+.m-row>span{opacity:.85}
+.m-seg{display:flex;gap:4px;padding:3px;border-radius:10px;background:rgba(0,0,0,.25)}
+.m-seg button,.m-step button{font:inherit;font-size:12px;color:#fff;border:0;border-radius:8px;padding:5px 10px;cursor:pointer;background:transparent}
+.m-seg button:hover,.m-step button:hover{background:rgba(255,255,255,.12)}
+.m-seg button.on{background:linear-gradient(90deg,#ff3b4e,#ff6a4d);font-weight:600}
+.m-step{display:flex;align-items:center;gap:6px;padding:3px;border-radius:10px;background:rgba(0,0,0,.25)}
+.m-step button{width:28px;padding:5px 0;font-size:15px;font-weight:600}
+.m-step b{min-width:32px;text-align:center;font-variant-numeric:tabular-nums}
 .m-keys{margin-top:clamp(6px,1.2vh,12px);text-align:center;font-size:11px;opacity:.7;max-width:calc(var(--c) * 4.6)}
 .m-card{width:clamp(250px,min(30vw,52vh),420px);padding:10px 10px clamp(10px,1.6vh,16px);flex:none}
 #m-view{display:block;width:100%;height:auto;aspect-ratio:7/5;border-radius:14px;background:radial-gradient(circle at 50% 60%,rgba(255,106,77,.35),transparent 70%)}
