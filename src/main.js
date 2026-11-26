@@ -12,6 +12,7 @@ import { Explosion } from './explosion.js';
 import { Smoke } from './smoke.js';
 import { Trash } from './trash.js';
 import { Kitchen } from './kitchen.js';
+import { Rival } from './rivals.js';
 
 const world = new World(document.getElementById('game'));
 const track = new Track(world.scene);
@@ -22,7 +23,7 @@ const trash = new Trash(world.scene, track);
 hud.initMap(track);
 hud.clock(); setInterval(() => hud.clock(), 30000);
 
-let bot = null, race = null, st = null, mode = 'menu';
+let bot = null, race = null, st = null, mode = 'menu', rivals = [];
 window.__game = { track, skids, trash, world, kitchen };   // для отладки из консоли
 
 // Гонка с выбранным роботом: старт чуть позади линии, носом по ходу трассы
@@ -30,16 +31,24 @@ function startRace(id) {
   if (bot) world.scene.remove(bot.mesh);
   clearBoom(); hud.hideOut();
   bot = new Robot(world.scene, ROBOTS[id]);
-  const s0 = track.at(-6);
-  bot.x = track.p[s0].x; bot.z = track.p[s0].z; bot.a = Math.atan2(track.t[s0].z, track.t[s0].x); bot.seg = s0;
-  race = { lap: 0, lapStart: 0, best: 0, started: false, lastSeg: s0, tokens: 0, earned: 0, collected: 0 };
+  // Стартовая решётка: по два в ряд за линией старта; игрок — во втором ряду слева
+  const slot = k => [-6 - Math.floor(k / 2) * 8, k % 2 ? -3.5 : 3.5];
+  const [ps, pl] = slot(2), s0 = track.at(ps), [px, , pz] = track.edge(s0, pl);
+  bot.x = px; bot.z = pz; bot.a = Math.atan2(track.t[s0].z, track.t[s0].x); bot.seg = s0;
+  race = { lap: 0, lapStart: 0, best: 0, started: false, lastSeg: s0, tokens: 0, earned: 0, collected: 0, crossings: 0 };
+  for (const r of rivals) r.dispose();
+  const pool = Object.keys(ROBOTS).filter(k => k !== id).sort(() => Math.random() - 0.5);
+  rivals = pool.slice(0, C.rivals.count).map((rid, k) => {
+    const r = new Rival(world.scene, ROBOTS[rid], track), [s, l] = slot(k < 2 ? k : k + 1);
+    r.place(s, l); return r;
+  });
   trash.reset();
   st = { pitting: false, wasManual: false, lastWallSay: 0, lastDriftSay: 0, lastChargeSay: 0, warned: false, wasDrift: false };
   input.keys = {}; input.lastKeyTime = 0;
   skids.clear(); smoke.clear();
   world.follow(bot, 0, true);
   hud.robot(bot.spec.name);
-  Object.assign(window.__game, { bot, st, race });
+  Object.assign(window.__game, { bot, st, race, rivals });
   menu.hide(); mode = 'race';
   hud.showHint();
   setTimeout(() => hud.say(P.start, 2200), 600);
@@ -142,7 +151,9 @@ function update(t, dt) {
   // Круги: пересечение старта вперёд
   const seg = bot.seg, n = track.n;
   bot.onPad = track.onPad(seg, track.lateral(seg, bot.x, bot.z));
+  if (race.lastSeg < n * 0.2 && seg > n * 0.8) race.crossings--;   // откатился назад через старт
   if (race.lastSeg > n * 0.8 && seg < n * 0.2) {
+    race.crossings++;
     if (race.started) {
       const lapMs = t - race.lapStart;
       const isBest = !race.best || lapMs < race.best;
@@ -154,9 +165,14 @@ function update(t, dt) {
   race.lastSeg = seg;
   hud.race(race.lap, race.started ? t - race.lapStart : 0, race.best);
 
-  // Мусор: робот собирает его в контейнер, пока тот не полон. Скрепки ещё и царапают корпус.
-  for (const kind of trash.update(t / 1000, dt, bot, bot.bin >= 100)) {
+  // Мусор: роботы собирают его в контейнер, пока тот не полон. Скрепки ещё и царапают корпус.
+  for (const { bot: who, kind } of trash.update(t / 1000, dt, [bot, ...rivals.filter(r => !r.out).map(r => r.bot)])) {
     const K = C.trash.kinds[kind];
+    if (who !== bot) {                              // соперник
+      who.bin = Math.min(100, who.bin + K.fill); who.binValue += K.value;
+      if (K.damage) who.rival.hurt(K.damage);
+      continue;
+    }
     bot.bin = Math.min(100, bot.bin + K.fill); bot.binValue += K.value; race.collected++;
     if (kind === 'coin' && t - (st.lastCoinSay || 0) > 4000) { st.lastCoinSay = t; hud.say(P.coin, 1200); }
     if (K.damage) {
@@ -216,28 +232,39 @@ function update(t, dt) {
   hud.health(bot.hp, bot.s.hp, repairing);
   hud.bin(bot.bin, unloading);
   hud.tokens(race.tokens);
+  hud.place(...placeOf());
 }
+
+// Место игрока в гонке: сколько ещё в гонке и сколько из них проехали больше
+function placeOf() {
+  const me = race.crossings * track.n + bot.seg, alive = rivals.filter(r => !r.out);
+  return [1 + alive.filter(r => r.progress() > me).length, alive.length + 1];
+}
+
+function updateRivals(t, dt) { for (const r of rivals) r.update(t / 1000, dt, t); }
 
 let last = 0;
 function loop(t) {
   const dt = Math.min((t - last) / 1000 || 0, 0.05); last = t;
   if (mode === 'race') {
     update(t, dt);
+    updateRivals(t, dt);
     if (mode === 'race') bot.render(dt, t);
     skids.update(bot);
     smoke.update(dt, bot);
     world.follow(bot, dt);
-    hud.drawMap(bot);
+    hud.drawMap(bot, rivals);
     hud.placeSay(bot, world.camera);
   } else if (mode === 'out') {
     // робот взорвался: камера стоит на месте взрыва и трясётся
     boom.update(dt);
     smoke.update(dt, null);   // старый дым досыпает, новый не идёт
-    trash.update(t / 1000, dt, null);
+    trash.update(t / 1000, dt, rivals.filter(r => !r.out).map(r => r.bot));
+    updateRivals(t, dt);                            // соперники продолжают гонку
     world.follow(bot, dt);
     const k = boom.shake() * 1.2;
     world.camera.position.x += (Math.random() - 0.5) * k; world.camera.position.y += (Math.random() - 0.5) * k;
-    hud.drawMap(bot);
+    hud.drawMap(bot, rivals);
     hud.placeSay(bot, world.camera);
   } else {
     menuCamera(dt);

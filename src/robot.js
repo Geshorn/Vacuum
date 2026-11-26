@@ -76,7 +76,8 @@ export class Robot {
 
   // Автопилот: едет к точке впереди по центру трассы, на крутых поворотах сбрасывает скорость
   // offFn(i) — смещение линии, по которой ехать (например, в пит-лейн); без него — по центру
-  auto(track, dt, offFn = null) {
+  // speedMul — доля от обычной скорости автопилота (у соперников своя)
+  auto(track, dt, offFn = null, speedMul = 1) {
     // в пит-лейн смотрим ближе вперёд, чтобы не срезать угол на съезде
     const look = Math.round(offFn ? 4 + this.speed() * 0.2 : 6 + this.speed() * 0.45);
     const i = track.at(this.seg + look);
@@ -84,7 +85,7 @@ export class Robot {
     const diff = wrap(Math.atan2(pz - this.z, px - this.x) - this.a);
     this.a += clamp(diff, -C.autoTurn * dt, C.autoTurn * dt);
     this.w = 0;
-    const want = C.autoSpeed * this.s.maxSpeed * (Math.abs(diff) > 0.5 ? 0.6 : 1);
+    const want = C.autoSpeed * speedMul * this.s.maxSpeed * (Math.abs(diff) > 0.5 ? 0.6 : 1);
     this.v = approach(this.v, want, this.s.accel, dt);
   }
 

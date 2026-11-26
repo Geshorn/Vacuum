@@ -219,16 +219,18 @@ export class Trash {
 
   reset() { for (const it of this.items) this.place(it); }
 
-  // Возвращает список собранного за кадр. full — контейнер полон, мусор не собирается.
-  update(t, dt, bot, full) {
-    const got = [], r = bot ? bot.s.radius + 0.4 : 0, A = C.trash.suckTime;
+  // bots — роботы, которые собирают мусор (у кого контейнер полон или кто выбыл — не собирают).
+  // Возвращает собранное за кадр: [{ bot, kind }].
+  update(t, dt, bots = []) {
+    const got = [], A = C.trash.suckTime;
+    const active = bots.filter(b => b && b.mesh.visible && b.bin < 100);
     for (const it of this.items) {
-      // анимация затягивания: мусор летит к роботу, уменьшается и чуть подлетает
+      // анимация затягивания: мусор летит к роботу, который его собрал, уменьшается и чуть подлетает
       if (it.anim) {
         const a = it.anim; a.t += dt;
-        const k = Math.min(1, a.t / A), e = k * k;
-        const tx = bot ? bot.x : a.x, tz = bot ? bot.z : a.z;
-        if (bot) { a.x = bot.x; a.z = bot.z; }
+        const k = Math.min(1, a.t / A), e = k * k, who = a.bot;
+        if (who && who.mesh.visible) { a.x = who.x; a.z = who.z; }
+        const tx = a.x, tz = a.z;
         it.mesh.position.set(a.x0 + (tx - a.x0) * e, Math.sin(k * Math.PI) * 0.8, a.z0 + (tz - a.z0) * e);
         it.mesh.scale.setScalar(1 - k * 0.9);
         it.mesh.rotation.y += dt * 12;
@@ -239,12 +241,15 @@ export class Trash {
       const u = it.mesh.userData;
       if (u.spin) u.spin.rotation.y += dt * (it.kind === 'coin' ? 2.5 : 0.8);   // монетки крутятся, скрепки поблёскивают
       if (u.bob) u.bob.position.y = 0.6 + Math.sin(t * 3 + it.phase) * 0.12;
-      if (!bot || full) continue;
-      if ((it.x - bot.x) ** 2 + (it.z - bot.z) ** 2 < r * r) {
-        it.alive = false;
-        it.anim = { t: 0, x0: it.x, z0: it.z, x: bot.x, z: bot.z };
-        it.back = t + rnd(C.trash.respawn[0], C.trash.respawn[1]);
-        got.push(it.kind);
+      for (const bot of active) {
+        const r = bot.s.radius + 0.4;
+        if ((it.x - bot.x) ** 2 + (it.z - bot.z) ** 2 < r * r) {
+          it.alive = false;
+          it.anim = { t: 0, x0: it.x, z0: it.z, x: bot.x, z: bot.z, bot };
+          it.back = t + rnd(C.trash.respawn[0], C.trash.respawn[1]);
+          got.push({ bot, kind: it.kind });
+          break;
+        }
       }
     }
     return got;

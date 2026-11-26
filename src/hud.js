@@ -16,7 +16,9 @@ export const hud = {
     this.track = track;
   },
 
-  drawMap(robot) {
+  place(p, total) { $('place').textContent = p + '/' + total; },
+
+  drawMap(robot, rivals = []) {
     const c = D.map.getContext('2d'), t = this.track;
     c.clearRect(0, 0, D.map.width, D.map.height);
     c.lineJoin = 'round'; c.beginPath();
@@ -32,6 +34,13 @@ export const hud = {
     c.fillStyle = '#4cd964'; c.fillRect(px - 3, py - 3, 6, 6);
     const [sx, sy] = this.toMap(t.p[0].x, t.p[0].z);
     c.fillStyle = '#fff'; c.fillRect(sx - 2, sy - 5, 4, 10);
+    // соперники — кружки их цвета
+    for (const r of rivals) {
+      if (r.out) continue;
+      const [x, y] = this.toMap(r.bot.x, r.bot.z);
+      c.fillStyle = r.bot.spec.color; c.strokeStyle = '#000'; c.lineWidth = 1;
+      c.beginPath(); c.arc(x, y, 3.2, 0, 7); c.fill(); c.stroke();
+    }
     // робот — стрелка
     const [rx, ry] = this.toMap(robot.x, robot.z);
     c.save(); c.translate(rx, ry); c.rotate(robot.a);
