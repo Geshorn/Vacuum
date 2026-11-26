@@ -13,6 +13,7 @@ import { Smoke } from './smoke.js';
 import { Trash } from './trash.js';
 import { Kitchen } from './kitchen.js';
 import { Rival } from './rivals.js';
+import { collideRobots } from './collide.js';
 
 const world = new World(document.getElementById('game'));
 const track = new Track(world.scene);
@@ -243,12 +244,28 @@ function placeOf() {
 
 function updateRivals(t, dt) { for (const r of rivals) r.update(t / 1000, dt, t); }
 
+// Роботы толкаются; урон игроку — с репликами и полоской ХП, соперникам — через их hurt()
+function bumps(t) {
+  const list = rivals.filter(r => !r.out).map(r => r.bot);
+  if (mode === 'race') list.push(bot);
+  collideRobots(list, (who, dmg, nx, nz) => {
+    who.hitN = [nx, nz];
+    if (who.rival) { who.rival.hurt(dmg); return; }
+    who.hp = Math.max(0, who.hp - dmg);
+    if (dmg > 3) who.dent(dmg);
+    who.scratch(); hud.hurt();
+    if (who.hp <= 0) explode(t);
+    else if (t - st.lastWallSay > 2000) { st.lastWallSay = t; hud.say(P.bump, 1400); }
+  }, t / 1000);
+}
+
 let last = 0;
 function loop(t) {
   const dt = Math.min((t - last) / 1000 || 0, 0.05); last = t;
   if (mode === 'race') {
     update(t, dt);
     updateRivals(t, dt);
+    if (mode === 'race') bumps(t);
     if (mode === 'race') bot.render(dt, t);
     skids.update(bot);
     smoke.update(dt, bot);
@@ -261,6 +278,7 @@ function loop(t) {
     smoke.update(dt, null);   // старый дым досыпает, новый не идёт
     trash.update(t / 1000, dt, rivals.filter(r => !r.out).map(r => r.bot));
     updateRivals(t, dt);                            // соперники продолжают гонку
+    bumps(t);
     world.follow(bot, dt);
     const k = boom.shake() * 1.2;
     world.camera.position.x += (Math.random() - 0.5) * k; world.camera.position.y += (Math.random() - 0.5) * k;
