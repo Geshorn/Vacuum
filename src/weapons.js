@@ -370,7 +370,7 @@ export class Combat {
       p.mesh.rotation.z += dt * 0.2;
       for (const b of bots) {
         if (b === p.owner && age < 1.5) continue;
-        if (b.slipUntil > now) continue;
+        if (b.slipUntil + W().soap.immune > now) continue;   // ещё скользит или только что выскользнул — даём выехать
         const r = W().soap.radius + b.s.radius * 0.5;
         if ((b.x - p.x) ** 2 + (b.z - p.z) ** 2 < r * r) {
           if (this.absorb(b, now)) continue;
@@ -385,7 +385,7 @@ export class Combat {
     // скольжение: закручивает и почти нет сцепления, потом плавно отпускает
     for (const b of bots) {
       const sl = b.slipUntil > now;
-      b.gripMul = sl ? 0.08 : 1;
+      b.gripMul = sl ? W().soap.grip : 1;
       if (sl) { b.a += b.spin * dt; b.spin *= Math.exp(-1.5 * dt); }
       // банан: крутится юзом, пока не кончится оборот; над головой звёздочки
       if (b.twirl > 0) { const d = Math.min(b.twirl, (b.twirlRate || 9) * dt); b.a += d; b.twirl -= d; b.gripMul = 0.15; }

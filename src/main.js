@@ -282,18 +282,23 @@ function updateRivals(t, dt) {
   combat.update(now, dt, list, (who, dmg, by, kind) => damage(who, dmg, by, t, kind));
 }
 
-// Подтягивание: кто отстал от робота прямо впереди больше чем на экран (C.catchUp.gap) дольше delay —
-// переносится на C.catchUp.to позади него. Не трогаем лидера, тех, кто в пит-лейне, «мёртвых» и выбывших.
+// Подтягивание: только последний в гонке, если отстал от предпоследнего больше чем на экран (C.catchUp.gap)
+// дольше delay, переносится на C.catchUp.to позади предпоследнего. Не в пит-лейне, не «мёртвым» и не выбывшим.
 function catchUp(t) {
   const now = t / 1000, Cc = C.catchUp, step = C.sampleStep, n = track.n;
   const field = rivals.filter(r => !r.out).map(r => ({ b: r.bot, r }));
   if (mode === 'race') field.push({ b: bot, r: null });
   const prog = e => e.r ? e.r.progress() : race.crossings * n + bot.seg;
   field.sort((a, b) => prog(b) - prog(a));
-  for (let i = 1; i < field.length; i++) {
+  // переносим только последнего — к предпоследнему; у остальных счётчик отставания сбрасываем
+  for (let i = 0; i < field.length - 1; i++) field[i].b.behindSince = 0;
+  for (let i = field.length - 1; i >= 1 && i === field.length - 1; i--) {
     const e = field[i], ahead = field[i - 1], b = e.b;
     const gap = (prog(ahead) - prog(e)) * step;
-    const busy = b.inLane || b.dead || b.stunUntil > now || (e.r && e.r.pitting) || ahead.b.inLane;
+    // нужен пит-стоп и съезд в пит-лейн уже близко (≤ 2 экранов) — не переносим, иначе проскочит зарядку
+    const needPit = b.bat < Cc.lowBat || (e.r ? e.r.pitting : st.pitting);
+    const toPit = ((track.pitStart - b.seg + n) % n) * step;
+    const busy = b.inLane || b.dead || b.stunUntil > now || ahead.b.inLane || (needPit && toPit < Cc.pitNear);
     if (gap < Cc.gap || busy) { b.behindSince = 0; continue; }
     if (!b.behindSince) { b.behindSince = now; continue; }
     if (now - b.behindSince < Cc.delay) continue;
