@@ -31,7 +31,7 @@ export function collideRobots(bots, onHit, now) {
     setVel(a, ax - jimp / ma * nx, az - jimp / ma * nz);
     setVel(b, bx + jimp / mb * nx, bz + jimp / mb * nz);
     // урон: сила удара минус порог; лёгкому достаётся больше
-    const base = Math.max(0, -vn - C.bump.threshold) * C.damage.k;
+    const base = Math.max(0, -vn - C.bump.threshold) * C.bump.k;
     const pa = lastHit.get(a) || {}, ready = !(pa[b.uid] > now - C.bump.cooldown);
     if (base > 0 && ready) {
       pa[b.uid] = now; lastHit.set(a, pa);
