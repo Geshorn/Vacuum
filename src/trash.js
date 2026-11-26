@@ -42,7 +42,7 @@ function fluffTexture() {
   const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
 const FLUFF_TEX = [fluffTexture(), fluffTexture(), fluffTexture()];
-const FLUFF_COLORS = ['#6f6b77', '#5c5865', '#7f7b88'];
+const FLUFF_COLORS = ['#a9a5b2', '#96929f', '#bcb8c4'];   // светло-серая: заметна на тёмном асфальте
 
 // Пыль — мягкий пушистый комок «как под диваном»: несколько слоёв пуха разного оттенка и размера + тень под ним
 function makeDust() {
