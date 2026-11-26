@@ -15,9 +15,10 @@ function makeStats() {
   const max = f => Math.max(...d.map(f));
   const accelOf = x => x.s.accel / x.s.maxSpeed;                 // 1 / время разгона
   const handOf = x => x.s.turn * x.s.steerAccel * x.s.grip;
-  const mM = max(x => x.s.mass), mA = max(accelOf), mH = max(handOf), mHP = max(x => x.s.hp);
+  const mM = max(x => x.s.mass), mA = max(accelOf), mH = max(handOf), mHP = max(x => x.s.hp), mS = max(x => x.s.maxSpeed);
   const out = {};
   for (const x of d) out[x.r.id] = [
+    ['Скорость', x.s.maxSpeed / mS, `${Math.round(x.s.maxSpeed * 6)} км/ч`],   // как на спидометре
     ['Разгон', accelOf(x) / mA, `${(x.s.maxSpeed / x.s.accel).toFixed(1)} с`],
     ['Управляемость', handOf(x) / mH, ''],
     ['Масса', x.s.mass / mM, `${Math.round(x.s.mass * 4)} кг`],

@@ -49,14 +49,17 @@ export class Combat {
       if ((dx * fx + dz * fz) / d > 0.2 && d < bd) { bd = d; tg = o; }
     }
     tg = tg || any;
-    const m = new THREE.Group(); this.group.add(m);
+    // всё, что относится к ракете (сам комок и шлейф), — в одной группе holder: при удалении уходит целиком,
+    // в том числе при перезапуске гонки (раньше шлейф оставался висеть в воздухе)
+    const holder = new THREE.Group(); this.group.add(holder);
+    const m = new THREE.Group(); holder.add(m);
     const mat = new THREE.MeshStandardMaterial({ color: '#9a96a2', roughness: 1, transparent: true, opacity: 0.9 });
     for (let k = 0; k < 4; k++) { const s = new THREE.Mesh(new THREE.SphereGeometry(rnd(0.5, 0.8), 10, 8), mat); s.position.set(rnd(-0.4, 0.4), rnd(-0.3, 0.3), rnd(-0.4, 0.4)); m.add(s); }
     const trail = [];
-    for (let k = 0; k < 8; k++) { const s = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 6), new THREE.MeshBasicMaterial({ color: '#c9c5d0', transparent: true, opacity: 0, depthWrite: false })); this.group.add(s); trail.push(s); }
+    for (let k = 0; k < 8; k++) { const s = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 6), new THREE.MeshBasicMaterial({ color: '#c9c5d0', transparent: true, opacity: 0, depthWrite: false })); holder.add(s); trail.push(s); }
     const st = { x: bot.x + fx * (bot.s.radius + 1), z: bot.z + fz * (bot.s.radius + 1), a: bot.a, until: now + P.life, k: 0 };
-    const cleanup = () => trail.forEach(s => this.group.remove(s));
-    this.extras.push({ mesh: m, update: (now, dt, bots, onHit) => {
+    const cleanup = () => {};
+    this.extras.push({ mesh: holder, update: (now, dt, bots, onHit) => {
       if (tg && !tg.mesh.visible) tg = null;          // цель выбыла — летит прямо и взорвётся в конце
       if (tg) {                                      // доворот к цели
         const want = Math.atan2(tg.z - st.z, tg.x - st.x);
@@ -370,7 +373,11 @@ export class Combat {
         else this.showStars(b, false);
       }
     }
-    this.extras = this.extras.filter(e => { const alive = e.update(now, dt, bots, onHit); if (!alive) this.group.remove(e.mesh); return alive; });
+    // объекты, созданные прямо во время обновления (например, взрыв ракеты), не должны потеряться:
+    // обновляем старый список, а новые добавляем к оставшимся
+    const cur = this.extras; this.extras = [];
+    const keep = cur.filter(e => { const alive = e.update(now, dt, bots, onHit); if (!alive) this.group.remove(e.mesh); return alive; });
+    this.extras = keep.concat(this.extras);
 
     // снаряды мусора: летят прямо, гаснут у стен
     const tr = this.track;

@@ -269,7 +269,7 @@ function updateRivals(t, dt) {
   if (mode === 'race') list.push(bot);
   pickups.update(t / 1000, dt, list, (who, w) => {
     if (who === bot) { hud.weapon(w); hud.say([WEAPONS[w].icon + ' ' + WEAPONS[w].name + '!'], 1400); }
-  });
+  }, chooseWeapon);
   const now = t / 1000;
   // соперники: применяют оружие, таранят того, кто впереди, а с пустым слотом рулят к ближайшей коробке
   for (const r of rivals) if (!r.out) {
@@ -277,6 +277,21 @@ function updateRivals(t, dt) {
     r.ram = r.bot.weapon ? combat.ramLane(r, list) : boxLane(r);
   }
   combat.update(now, dt, list, (who, dmg, by, kind) => damage(who, dmg, by, t, kind));
+}
+
+// Какое оружие выдать из коробки: отстающим чаще атакующее, лидеру — защитное.
+// rank: 0 — лидер, 1 — последний; вес атакующего растёт к хвосту, защитного — к голове.
+function chooseWeapon(who) {
+  const prog = b => b === bot ? race.crossings * track.n + bot.seg : b.rival.progress();
+  const field = [bot, ...rivals.filter(r => !r.out).map(r => r.bot)].filter(b => mode === 'race' || b !== bot);
+  const me = prog(who), ahead = field.filter(b => b !== who && prog(b) > me).length;
+  const rank = field.length > 1 ? ahead / (field.length - 1) : 0.5;
+  const { attack, defend, bias } = C.weapons.catchUp;
+  const wa = 1 + (bias - 1) * rank, wd = 1 + (bias - 1) * (1 - rank);
+  const pool = [...attack.map(w => [w, wa]), ...defend.map(w => [w, wd])];
+  let x = Math.random() * pool.reduce((s, [, k]) => s + k, 0);
+  for (const [w, k] of pool) { x -= k; if (x <= 0) return w; }
+  return pool[0][0];
 }
 
 // Смещение к ближайшей целой коробке впереди (или null)
@@ -295,6 +310,12 @@ function boxLane(r) {
 // Урон от оружия или удара: игроку — с репликами и полоской ХП, соперникам — через их hurt().
 // Если соперника подбил игрок — награда жетонами.
 function damage(who, dmg, by, t, kind) {
+  // урон оружия: часть — в процентах от максимального ХП (для эталона с 100 ХП ничего не меняется),
+  // так что живучим тяжёлым тоже ощутимо, а хрупким лёгким — чуть легче
+  if (kind === 'trash' || kind === 'cap' || kind === 'rocket') {
+    const f = C.weapons.hpScale;
+    dmg *= 1 - f + f * who.s.hp / 100;
+  }
   if (who.rival) {
     if (dmg <= 0) return;
     const wasOut = who.rival.out;

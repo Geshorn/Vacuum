@@ -46,8 +46,8 @@ export class Pickups {
 
   reset() { for (const it of this.items) { it.alive = true; it.g.visible = true; } }
 
-  // bots — роботы на трассе; onGet(bot, weapon) — кто что подобрал
-  update(t, dt, bots, onGet) {
+  // bots — роботы на трассе; onGet(bot, weapon) — кто что подобрал; choose(bot) — какое оружие выдать
+  update(t, dt, bots, onGet, choose = null) {
     for (const it of this.items) {
       if (!it.alive) { if (t > it.back) { it.alive = true; it.g.visible = true; } continue; }
       it.box.rotation.y += dt * 1.6; it.box.rotation.x = Math.sin(t * 1.3 + it.ph) * 0.3;
@@ -56,7 +56,7 @@ export class Pickups {
         if (b.weapon || !b.mesh.visible) continue;
         const r = b.s.radius + 1;
         if ((b.x - it.x) ** 2 + (b.z - it.z) ** 2 < r * r) {
-          const keys = Object.keys(WEAPONS), w = keys[Math.floor(Math.random() * keys.length)];
+          const keys = Object.keys(WEAPONS), w = choose ? choose(b) : keys[Math.floor(Math.random() * keys.length)];
           b.weapon = w; it.alive = false; it.g.visible = false; it.back = t + C.pickups.respawn;
           onGet(b, w); break;
         }
