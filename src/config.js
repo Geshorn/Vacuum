@@ -58,7 +58,8 @@ export const C = {
   // Оружие
   weapons: {
     soap:   { radius: 3.2, life: 14, slipTime: 1.4, spin: 5, damage: 0 },        // лужа: радиус, сколько живёт, сколько скользишь, закрутка
-    trash:  { shots: 6, binPerShot: 5, interval: 0.09, speed: 55, life: 1.2, damage: 6, slow: 0.55 },   // залп: до 6 комков по 5% контейнера
+    // залп: стоит cost % контейнера, длится time с по rate комков в секунду; комки слегка доводятся на цель впереди
+    trash:  { cost: 20, time: 2.5, rate: 10, speed: 55, life: 1.3, damage: 2.5, slow: 0.85, homing: 5, cone: 0.7 },
     sponge: { time: 7 },                                                          // щит: 7 с защиты от любого урона
     killReward: 15,                                                               // жетонов игроку за подбитого соперника
   },

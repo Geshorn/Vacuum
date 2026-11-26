@@ -3,7 +3,8 @@ import { C } from './config.js';
 
 /* Оружие роботов.
    🧴 Моющее средство — лужа пены позади робота: кто наедет, того закручивает и почти лишает сцепления.
-   🗑️ Залп мусором — очередь комков мусора вперёд из своего контейнера (тратит содержимое): урон и потеря скорости.
+   🗑️ Залп мусором — за фиксированные 20% контейнера длинная очередь комков вперёд (2.5 с), комки слегка
+      доводятся на ближайшего соперника впереди: урон и потеря скорости.
    🧽 Губка-щит — на несколько секунд защищает от любого урона: выстрелов, луж, столкновений и стен.
    Соперники применяют оружие сами (think). */
 const W = () => C.weapons;
@@ -32,9 +33,14 @@ export class Combat {
       const d = bot.s.radius + W().soap.radius + 0.8;
       this.addPuddle(bot.x - fx * d, bot.z - fz * d, bot, now);
     } else if (w === 'trash') {
-      const n = Math.min(W().trash.shots, Math.floor(bot.bin / W().trash.binPerShot));
-      if (n < 1) return false;
-      for (let k = 0; k < n; k++) this.queue.push({ bot, at: now + k * W().trash.interval });
+      // фиксированная плата из контейнера, дальше — длинная очередь
+      const T = W().trash;
+      if (bot.bin < T.cost) return false;
+      if (bot.bin > 0) bot.binValue *= (bot.bin - T.cost) / bot.bin;
+      bot.bin -= T.cost;
+      const n = Math.round(T.time * T.rate);
+      for (let k = 0; k < n; k++) this.queue.push({ bot, at: now + k / T.rate });
+      bot.firingUntil = now + T.time;
     } else if (w === 'sponge') {
       bot.shieldUntil = now + W().sponge.time; this.showShield(bot, true);
     }
@@ -75,10 +81,18 @@ export class Combat {
     m.position.set(bot.x + dx * (bot.s.radius + 0.8), 1, bot.z + dz * (bot.s.radius + 0.8)); m.castShadow = true;
     this.group.add(m);
     this.pellets.push({ mesh: m, vx: dx * (sp + Math.max(0, bot.v)), vz: dz * (sp + Math.max(0, bot.v)), owner: bot, life: W().trash.life, seg: bot.seg });
-    // выстрел тратит мусор из контейнера (и его ценность)
-    const take = Math.min(bot.bin, W().trash.binPerShot);
-    if (bot.bin > 0) bot.binValue *= (bot.bin - take) / bot.bin;
-    bot.bin -= take;
+  }
+
+  // Доводка: ближайший робот в конусе перед снарядом
+  target(p, bots) {
+    const T = W().trash, m = p.mesh.position, v = Math.hypot(p.vx, p.vz) || 1;
+    let best = null, bd = 60;
+    for (const b of bots) {
+      if (b === p.owner || !b.mesh.visible) continue;
+      const dx = b.x - m.x, dz = b.z - m.z, d = Math.hypot(dx, dz);
+      if (d < bd && (dx * p.vx + dz * p.vz) / (d * v) > T.cone) { bd = d; best = b; }
+    }
+    return best;
   }
 
   // onHit(target, dmg, attacker) — нанести урон (main решает, игрок это или соперник)
@@ -118,6 +132,14 @@ export class Combat {
     for (const p of this.pellets) {
       p.life -= dt;
       const m = p.mesh;
+      // слегка поворачиваем снаряд к цели (не больше homing рад/с) — не нужно целиться идеально
+      const tg = this.target(p, bots);
+      if (tg) {
+        const sp = Math.hypot(p.vx, p.vz), cur = Math.atan2(p.vz, p.vx), want = Math.atan2(tg.z - m.position.z, tg.x - m.position.x);
+        let da = Math.atan2(Math.sin(want - cur), Math.cos(want - cur));
+        da = Math.max(-W().trash.homing * dt, Math.min(W().trash.homing * dt, da));
+        p.vx = Math.cos(cur + da) * sp; p.vz = Math.sin(cur + da) * sp;
+      }
       m.position.x += p.vx * dt; m.position.z += p.vz * dt; m.rotation.x += dt * 9; m.rotation.y += dt * 7;
       p.seg = tr.nearest(m.position.x, m.position.z, p.seg);
       const lat = tr.lateral(p.seg, m.position.x, m.position.z), [lo, hi] = tr.bounds(p.seg, lat, 0.3);
@@ -150,7 +172,7 @@ export class Combat {
     const others = bots.filter(o => o !== b && o.mesh.visible).map(rel);
     let go = false;
     if (w === 'soap') go = others.some(o => o.dot < -0.6 && o.d < 28) || held > 12;
-    if (w === 'trash') go = b.bin >= W().trash.binPerShot * 2 && others.some(o => o.dot > 0.93 && o.d < 40);
+    if (w === 'trash') go = b.bin >= W().trash.cost && others.some(o => o.dot > 0.85 && o.d < 45);
     if (w === 'sponge') go = b.hp < b.s.hp * 0.7 || others.some(o => o.d < 10) || held > 10;
     if (go && held > 0.8 && this.fire(b, now)) rival.gotAt = 0;
   }
