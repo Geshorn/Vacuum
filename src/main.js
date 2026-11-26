@@ -279,6 +279,39 @@ function updateRivals(t, dt) {
   combat.update(now, dt, list, (who, dmg, by, kind) => damage(who, dmg, by, t, kind));
 }
 
+// Подтягивание: кто отстал от робота прямо впереди больше чем на экран (C.catchUp.gap) дольше delay —
+// переносится на C.catchUp.to позади него. Не трогаем лидера, тех, кто в пит-лейне, «мёртвых» и выбывших.
+function catchUp(t) {
+  const now = t / 1000, Cc = C.catchUp, step = C.sampleStep, n = track.n;
+  const field = rivals.filter(r => !r.out).map(r => ({ b: r.bot, r }));
+  if (mode === 'race') field.push({ b: bot, r: null });
+  const prog = e => e.r ? e.r.progress() : race.crossings * n + bot.seg;
+  field.sort((a, b) => prog(b) - prog(a));
+  for (let i = 1; i < field.length; i++) {
+    const e = field[i], ahead = field[i - 1], b = e.b;
+    const gap = (prog(ahead) - prog(e)) * step;
+    const busy = b.inLane || b.dead || b.stunUntil > now || (e.r && e.r.pitting) || ahead.b.inLane;
+    if (gap < Cc.gap || busy) { b.behindSince = 0; continue; }
+    if (!b.behindSince) { b.behindSince = now; continue; }
+    if (now - b.behindSince < Cc.delay) continue;
+    // переносим: на трассу за роботом впереди, носом по ходу, с приличной скоростью
+    const target = prog(ahead) - Math.round(Cc.to / step), seg = track.at(target), cross = Math.floor(target / n);
+    combat.poof(b.x, b.z);
+    const lat = Math.max(-track.half + 2, Math.min(track.half - 2, track.lateral(b.seg, b.x, b.z)));
+    const [x, , z] = track.edge(seg, lat);
+    b.x = x; b.z = z; b.seg = seg; b.a = Math.atan2(track.t[seg].z, track.t[seg].x); b.lat = 0;
+    b.v = Math.max(b.v, b.s.maxSpeed * 0.6); b.behindSince = 0;
+    combat.poof(x, z);
+    if (e.r) { e.r.race.crossings = cross; e.r.race.lastSeg = seg; }
+    else {
+      const crossed = cross - race.crossings;
+      if (crossed > 0 && race.started) { race.lap += crossed; race.lapStart = t; }   // перескочил старт — круг засчитан, время круга заново
+      race.crossings = cross; race.lastSeg = seg;
+      hud.say(P.catchUp, 1600);
+    }
+  }
+}
+
 // Какое оружие выдать из коробки: отстающим чаще атакующее, лидеру — защитное.
 // rank: 0 — лидер, 1 — последний; вес атакующего растёт к хвосту, защитного — к голове.
 function chooseWeapon(who) {
@@ -355,6 +388,7 @@ function loop(t) {
     update(t, dt);
     updateRivals(t, dt);
     if (mode === 'race') bumps(t);
+    if (mode === 'race') catchUp(t);
     if (mode === 'race') bot.render(dt, t);
     skids.update(bot);
     smoke.update(dt, bot);

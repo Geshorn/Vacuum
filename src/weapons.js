@@ -78,6 +78,24 @@ export class Combat {
     } });
   }
 
+  // Облачко-«поф» на месте телепорта (только эффект, никого не трогает)
+  poof(x, z) {
+    const g = new THREE.Group(); g.position.set(x, 0, z); this.group.add(g);
+    const puffs = [];
+    for (let k = 0; k < 10; k++) {
+      const m = new THREE.Mesh(new THREE.SphereGeometry(rnd(0.6, 1.1), 10, 8), new THREE.MeshBasicMaterial({ color: '#cfe6ff', transparent: true, opacity: 0.8, depthWrite: false }));
+      const a = k / 10 * Math.PI * 2; m.position.set(Math.cos(a) * 0.8, 0.8, Math.sin(a) * 0.8); g.add(m);
+      puffs.push({ m, vx: Math.cos(a) * 6, vz: Math.sin(a) * 6 });
+    }
+    const born = performance.now() / 1000;
+    this.extras.push({ mesh: g, update: now => {
+      const f = (now - born) / 0.6;
+      if (f >= 1) return false;
+      for (const p of puffs) { p.m.position.x += p.vx / 60; p.m.position.z += p.vz / 60; p.m.position.y += 0.05; p.m.material.opacity = 0.8 * (1 - f); p.m.scale.setScalar(1 + f); }
+      return true;
+    } });
+  }
+
   // Толчок роботу в мировом направлении (nx, nz) с силой power (лёгких отбрасывает дальше)
   push(b, nx, nz, power) {
     const p = power / Math.sqrt(b.s.mass), c = Math.cos(b.a), s = Math.sin(b.a);
