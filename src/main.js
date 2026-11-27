@@ -60,6 +60,7 @@ function startRace(id) {
   hud.robot(bot.spec.name);
   Object.assign(window.__game, { bot, st, race, rivals });
   menu.hide(); mode = 'race';
+  stopCountdown(); hud.pause(false); runCountdown('Вперёд!');   // старт — после отсчёта
   hud.showHint();
   setTimeout(() => hud.say(P.start, 2200), 600);
   clearTimeout(startRace.hintT); startRace.hintT = setTimeout(() => hud.hideHint(), 9000);
@@ -81,10 +82,16 @@ function setPause(on) {
   }
   if (!isPaused() || countdown) return;
   hud.pause(false);
+  runCountdown();
+}
+// Отсчёт 3-2-1 при замершей игре; после него игра идёт. go — надпись после «1» (на старте гонки)
+function runCountdown(go) {
+  if (!isPaused()) pauseClock();
   let n = 3; hud.countdown(n);
   countdown = setInterval(() => {
     if (--n > 0) { hud.countdown(n); return; }
     stopCountdown(); resumeClock(); input.keys = {};
+    if (go) hud.countdown(go);
   }, 1000);
 }
 function stopCountdown() { clearInterval(countdown); countdown = null; hud.countdown(0); }
