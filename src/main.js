@@ -44,7 +44,7 @@ function loadMap(id) {
   rivals = [];
   if (bot) { world.scene.remove(bot.mesh); bot = null; }
   const M = MAPS[id];
-  track = new Track(world.scene, M.points, M.bridge);
+  track = new Track(world.scene, M.points, M);
   setGround(track);
   kitchen = new M.Scenery(world.scene, track);
   trash = new Trash(world.scene, track);
@@ -437,6 +437,11 @@ function updateRivals(t, dt) {
     if (who === bot) { hud.weapon(w); hud.say([WEAPONS[w].icon + ' ' + WEAPONS[w].name + '!'], 1400); }
   }, chooseWeapon);
   const now = t / 1000;
+  // помехи самой карты (в саду — дождеватели): кого окатило — реплика
+  kitchen.affect?.(list, now, who => {
+    if (who === bot) hud.say(P.wet, 1400);
+    else if (who.rival) chat.say(who.rival, RP.wet, bot);
+  });
   // соперники: применяют оружие, таранят того, кто впереди, а с пустым слотом рулят к ближайшей коробке
   for (const r of rivals) if (!r.out) {
     combat.think(r, list, now);

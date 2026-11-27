@@ -4,8 +4,9 @@ import { C } from './config.js';
 // Замкнутая трасса: центральная линия разбита на сегменты, у каждого есть точка, направление и нормаль (влево).
 export class Track {
   // points — опорные точки центральной линии [x, z] (из maps.js), трасса замкнута.
-  // bridge — мост: { at: сегмент середины, flat: длина верха в сегментах, ramp: длина въезда/съезда, height }
-  constructor(scene, points, bridge = null) {
+  // opts (из maps.js): bridge — мост { at, flat, ramp, height, rails }; jump — трамплин { at, ramp, height }
+  // (at — точка [x, z] на трассе или номер сегмента); tunnel — тоннель { at, len } (дорога ровная, холм строит обстановка)
+  constructor(scene, points, opts = {}) {
     const curve = new THREE.CatmullRomCurve3(points.map(([x, z]) => new THREE.Vector3(x, 0, z)), true, 'centripetal');
     this.length = curve.getLength();
     const n = Math.round(this.length / C.sampleStep);
@@ -23,25 +24,56 @@ export class Track {
     }
     this.group = new THREE.Group();
     scene.add(this.group);
-    this.setupHeight(bridge);
+    this.setupHeight(opts);
     this.setupPit();
     this.buildRoad(); this.buildCurbs(); this.buildWalls(); this.buildStart(); this.buildPit();
-    if (bridge) this.buildBridge();
+    if (this.bridge) this.buildBridge();
+    if (this.jump) this.buildJump();
   }
 
   // --- Высота дороги (мост) -------------------------------------------------------
   // Физика плоская (столкновения, стены — как на земле), а дорога, бортики, роботы, мусор и коробки
   // на этом участке рисуются выше: плавный въезд, ровный верх, плавный съезд.
-  setupHeight(B) {
+  setupHeight({ bridge, jump, tunnel } = {}) {
     this.h = new Float32Array(this.n);
-    if (B && Array.isArray(B.at)) B = { ...B, at: this.nearest(B.at[0], B.at[1]) };   // середина задана точкой [x, z]
-    this.bridge = B;
-    if (!B) return;
-    const half = B.flat / 2, total = half + B.ramp;
-    for (let k = -Math.ceil(total); k <= Math.ceil(total); k++) {
-      const d = Math.abs(k), u = d <= half ? 1 : Math.max(0, 1 - (d - half) / B.ramp);
-      this.h[this.at(B.at + k)] = B.height * u * u * (3 - 2 * u);
+    const seg = o => o && (Array.isArray(o.at) ? { ...o, at: this.nearest(o.at[0], o.at[1]) } : o);   // точка [x, z] → сегмент
+    const B = this.bridge = seg(bridge);
+    this.jump = seg(jump); this.tunnel = seg(tunnel);
+    if (B) {
+      const half = B.flat / 2, total = half + B.ramp;
+      for (let k = -Math.ceil(total); k <= Math.ceil(total); k++) {
+        const d = Math.abs(k), u = d <= half ? 1 : Math.max(0, 1 - (d - half) / B.ramp);
+        this.h[this.at(B.at + k)] = B.height * u * u * (3 - 2 * u);
+      }
     }
+    // трамплин: от at - ramp плавно (к краю — круче) поднимается до height, на at — обрыв на землю
+    const J = this.jump;
+    if (J) for (let k = 0; k <= J.ramp; k++) { const u = k / J.ramp; this.h[this.at(J.at - J.ramp + k)] = J.height * u * u; }
+    this.hasHeight = !!(B || J);
+  }
+
+  // Трамплин: деревянные борта-клинья под въездом и стенка обрыва
+  buildJump() {
+    const J = this.jump, w = this.half + C.wallThick;
+    const wood = new THREE.MeshStandardMaterial({ color: '#c08a55', roughness: 0.8, side: THREE.DoubleSide });
+    const pos = [], idx = [];
+    const quad = (a, b, c, d) => { const o = pos.length / 3; pos.push(...a, ...b, ...c, ...d); idx.push(o, o + 1, o + 2, o, o + 2, o + 3); };
+    for (let k = 0; k < J.ramp; k++) {
+      const i = this.at(J.at - J.ramp + k), j = this.at(i + 1);
+      for (const s of [-1, 1]) {
+        const a = this.edge(i, s * w), b = this.edge(j, s * w);
+        quad([a[0], 0, a[2]], [b[0], 0, b[2]], b, a);
+      }
+    }
+    const lip = this.at(J.at), L = this.edge(lip, w), R = this.edge(lip, -w);
+    quad([L[0], 0, L[2]], [R[0], 0, R[2]], R, L);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
+    const m = new THREE.Mesh(g, wood); m.castShadow = m.receiveShadow = true; this.group.add(m);
+    // жёлто-чёрная полоса на краю обрыва
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.12, this.half * 2), new THREE.MeshStandardMaterial({ color: '#ffca28' }));
+    const p = this.p[lip], t = this.t[lip];
+    stripe.position.set(p.x, J.height + 0.08, p.z); stripe.rotation.y = -Math.atan2(t.z, t.x); this.group.add(stripe);
   }
 
   // Высота дороги и наклон (подъём на единицу длины по ходу трассы) в сегменте i

@@ -193,17 +193,35 @@ export class Robot {
   }
 
   render(dt, t) {
-    // на мосту — выше и с наклоном по ходу подъёма (нос вверх на въезде, вниз на съезде)
+    // на мосту и трамплине — выше и с наклоном по ходу подъёма (нос вверх на въезде, вниз на съезде);
+    // с края трамплина на скорости — полёт по дуге (только картинка: физика плоская)
     let y = 0, pitch = 0;
-    if (ground?.bridge && this.seg != null) {
+    if (ground?.hasHeight && this.seg != null) {
       const sg = ground.nearest(this.x, this.z, this.seg);   // точный сегмент под роботом (this.seg может отставать)
-      y = ground.heightAtPos(sg, this.x, this.z);
+      const g = ground.heightAtPos(sg, this.x, this.z);
       const t = ground.t[sg], along = Math.cos(this.a) * t.x + Math.sin(this.a) * t.z;
       pitch = Math.atan(ground.slopeAtPos(sg, this.x, this.z)) * along;
+      const J = ground.jump;
+      const rel = k => (k - J?.at + ground.n * 1.5) % ground.n - ground.n / 2;   // сегмент относительно края (−: до, +: после)
+      // слетел с края: был наверху и дорога под ним пошла вниз — летим с высоты края,
+      // вертикальная скорость — от скорости и крутизны въезда у края
+      if (J && !this.air && dt > 0 && rel(sg) >= 0 && rel(sg) < 4 && (this.lastY ?? 0) > J.height * 0.75 && g < this.lastY - 0.01 && this.v * along > 4) {
+        this.air = { y: J.height, vy: this.v * along * (2 * J.height / (J.ramp * C.sampleStep)) * 0.8 };
+      }
+      if (this.air) {
+        const A = this.air; A.vy -= 32 * dt; A.y += A.vy * dt;
+        pitch = Math.atan2(A.vy, Math.max(4, Math.abs(this.v))) * 0.5;
+        if (A.y <= g) { this.air = null; this.land = 0.25; y = g; }   // приземлился
+        else y = A.y;
+      } else y = g;
+      this.lastSeg = sg; this.lastY = y;
       // наклон догоняет нужный плавно (без рывков на стыках сегментов), при паузе (dt = 0) — сразу
       this.pitch = dt > 0 && this.pitch != null ? this.pitch + (pitch - this.pitch) * Math.min(1, dt * 12) : pitch;
       pitch = this.pitch;
     }
+    // приземление: корпус на мгновение проседает
+    if (this.land > 0) { this.land = Math.max(0, this.land - dt); this.mesh.scale.y = 1 - Math.sin(this.land / 0.25 * Math.PI) * 0.18; }
+    else if (this.mesh.scale.y !== 1) this.mesh.scale.y = 1;
     this.mesh.position.set(this.x, y, this.z);
     this.mesh.rotation.y = -this.a;
     this.mesh.rotation.z = pitch;
