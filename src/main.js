@@ -60,6 +60,7 @@ function startRace(id) {
   hud.robot(bot.spec.name);
   Object.assign(window.__game, { bot, st, race, rivals });
   menu.hide(); mode = 'race';
+  resetHud();
   stopCountdown(); hud.pause(false); runCountdown('Вперёд!');   // старт — после отсчёта
   hud.showHint();
   setTimeout(() => hud.say(P.start, 2200), 600);
@@ -363,6 +364,17 @@ function update(t, dt) {
   hud.tokens(race.tokens);
   hud.place(...placeOf());
   hud.blind(bot.blindUntil > t / 1000);
+}
+
+// Верхняя панель и спидометр для новой гонки — сразу, ещё во время стартового отсчёта
+// (иначе до первого кадра гонки висят цифры прошлой)
+function resetHud() {
+  hud.race(0, 0, 0);
+  if (race.mode === 'race') hud.lapInfo('Круг', race.laps ? `1/${race.laps}` : 1);
+  else if (race.mode === 'arena') hud.lapInfo('Соперников', rivals.length);
+  else hud.lapInfo('Осталось', fmt(race.cleanTime * 1000).replace(/\.\d$/, ''));
+  hud.speed(0); hud.battery(bot.bat, false); hud.health(bot.hp, bot.s.hp, false);
+  hud.bin(bot.bin, false); hud.tokens(race.tokens); hud.place(...placeOf());
 }
 
 // Место игрока в гонке: сколько ещё в гонке и сколько из них проехали больше
