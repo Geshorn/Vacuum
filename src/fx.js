@@ -141,14 +141,17 @@ export class Effects {
     this.setRain(mode === 'rain');
     // фары: свет-«конус» на дороге перед каждым роботом и настоящий прожектор у игрока
     if (mode === 'blackout' && !this.spot) {
-      const sp = this.spot = new THREE.SpotLight('#fff1c9', 260, 60, 0.55, 0.65, 1.4);
+      // фара игрока — настоящий прожектор с тенью: стенки загораживают свет, за бортик он не попадает
+      const sp = this.spot = new THREE.SpotLight('#fff1c9', 320, 48, 0.5, 0.6, 1.3);
+      sp.castShadow = true; sp.shadow.mapSize.set(1024, 1024); sp.shadow.bias = -0.002; sp.shadow.camera.near = 0.5;
       this.group.add(sp, sp.target);
+      this.runway();
       const cv = document.createElement('canvas'); cv.width = 64; cv.height = 128; const x = cv.getContext('2d');
       const gr = x.createLinearGradient(0, 128, 0, 0); gr.addColorStop(0, 'rgba(255,240,200,.75)'); gr.addColorStop(1, 'rgba(255,240,200,0)');
       x.fillStyle = gr; x.beginPath(); x.moveTo(26, 128); x.lineTo(38, 128); x.lineTo(64, 0); x.lineTo(0, 0); x.fill();
       this.beamTex = new THREE.CanvasTexture(cv); this.beams = new Map();
     }
-    if (mode !== 'blackout' && this.spot) { this.group.remove(this.spot, this.spot.target); this.spot = null; for (const m of this.beams.values()) this.group.remove(m); this.beams.clear(); }
+    if (mode !== 'blackout' && this.spot) { this.group.remove(this.spot, this.spot.target); this.spot = null; for (const m of this.beams.values()) this.group.remove(m); this.beams.clear(); if (this.lightsRow) { this.group.remove(this.lightsRow); this.lightsRow = null; } }
     // вечеринка: три цветных прожектора кружат над камерой
     if (mode === 'party' && !this.party) {
       this.party = ['#ff3bd4', '#3bc8ff', '#ffe03b'].map(c => { const l = new THREE.PointLight(c, 160, 60, 1.6); this.group.add(l); return l; });
@@ -172,6 +175,22 @@ export class Effects {
     if (mode !== 'bubbles' && this.bubbles) { for (const b of this.bubbles) this.group.remove(b.m); this.bubbles = null; }
   }
 
+  // Огоньки вдоль бортиков, как на взлётной полосе: в темноте видно, куда поворачивает трасса
+  runway() {
+    const t = this.track, spots = [];
+    for (let i = 0; i < t.n; i += 4) {
+      if (t.gap?.(i)) continue;
+      for (const s of [1, -1]) {
+        const off = s > 0 ? Math.max(t.halfAt(i), t.pitOff(i) + t.ph) + C.wallThick / 2 : -(t.halfAt(i) + C.wallThick / 2);
+        spots.push(t.edge(i, off, C.wallHeight + 0.15));
+      }
+    }
+    const geo = new THREE.SphereGeometry(0.28, 6, 4), m = new THREE.MeshBasicMaterial({ color: '#ffb347' });
+    const inst = new THREE.InstancedMesh(geo, m, spots.length), M4 = new THREE.Matrix4();
+    spots.forEach(([x, y, z], k) => inst.setMatrixAt(k, M4.makeTranslation(x, y, z)));
+    inst.computeBoundingSphere(); this.group.add(inst); this.lightsRow = inst; this.runwayMat = m;
+  }
+
   // Каждый кадр — части погоды, которые двигаются
   updateMode(dt, now, bots, cam) {
     if (this.spot) {
@@ -185,8 +204,9 @@ export class Effects {
         if (!b.mesh.visible) continue;
         let m = this.beams.get(b);
         if (!m) {
-          m = new THREE.Mesh(new THREE.PlaneGeometry(9, 15), new THREE.MeshBasicMaterial({ map: this.beamTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
-          m.geometry.rotateX(-Math.PI / 2); m.geometry.translate(0, 0, -7.5); this.group.add(m); this.beams.set(b, m);
+          // луч на дороге: короткий и узкий, чтобы не вылезал за бортики
+          m = new THREE.Mesh(new THREE.PlaneGeometry(5, 10), new THREE.MeshBasicMaterial({ map: this.beamTex, transparent: true, opacity: 0.7, depthWrite: false, blending: THREE.AdditiveBlending }));
+          m.geometry.rotateX(-Math.PI / 2); m.geometry.translate(0, 0, -5); this.group.add(m); this.beams.set(b, m);
         }
         m.position.set(b.x + Math.cos(b.a) * b.s.radius, b.mesh.position.y + 0.12, b.z + Math.sin(b.a) * b.s.radius);
         m.rotation.y = -b.a - Math.PI / 2; seen.add(b);
@@ -253,7 +273,7 @@ export class Effects {
       } else if (fast && this.rain) {
         b.fxT = 0.05;
         this.emit(this.geo.s, this.mats.spray, bx, y + 0.3, bz, rnd(-2, 2), rnd(2, 4), rnd(-2, 2), 0.4, { g: 15, scale: 1.5 });
-      } else if (fast) {
+      } else if (fast && this.mode !== 'blackout') {   // в темноте пыль не видно
         b.fxT = 0.09;
         this.emit(this.geo.puff, this.mats.dust, bx + rnd(-0.5, 0.5), y + 0.3, bz + rnd(-0.5, 0.5), rnd(-0.5, 0.5), 0.6, rnd(-0.5, 0.5), 0.6, { grow: 1.5, fade: true, ownMat: true });
         this.parts.at(-1) && (this.parts.at(-1).op = 0.35);
