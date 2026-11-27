@@ -159,10 +159,13 @@ export class Effects {
           const gr = x.createLinearGradient(0, 128, 0, 0); gr.addColorStop(0, 'rgba(255,240,200,.75)'); gr.addColorStop(1, 'rgba(255,240,200,0)');
           x.fillStyle = gr; x.beginPath(); x.moveTo(26, 128); x.lineTo(38, 128); x.lineTo(64, 0); x.lineTo(0, 0); x.fill();
         } else {
-          // рассеянный свет: мягкое вытянутое пятно, ярче у робота и плавно гаснет к краям
-          x.translate(32, 96); x.scale(1, 2.6);
-          const gr = x.createRadialGradient(0, 0, 0, 0, 0, 32); gr.addColorStop(0, 'rgba(255,226,170,.55)'); gr.addColorStop(0.5, 'rgba(255,214,150,.22)'); gr.addColorStop(1, 'rgba(255,210,140,0)');
-          x.fillStyle = gr; x.beginPath(); x.arc(0, 0, 32, 0, 7); x.fill();
+          // вечерняя фара: узкий конус от робота (остриё внизу текстуры), тусклый и с размытыми краями —
+          // рисуем несколько всё более узких треугольников с маленькой прозрачностью, свет гаснет к дальнему концу
+          for (let k = 0; k < 7; k++) {
+            const w = 30 - k * 4, gr = x.createLinearGradient(0, 128, 0, 0);
+            gr.addColorStop(0, 'rgba(255,228,170,.16)'); gr.addColorStop(0.6, 'rgba(255,220,160,.08)'); gr.addColorStop(1, 'rgba(255,215,150,0)');
+            x.fillStyle = gr; x.beginPath(); x.moveTo(31, 128); x.lineTo(33, 128); x.lineTo(32 + w, 0); x.lineTo(32 - w, 0); x.fill();
+          }
         }
         this.beamTex = new THREE.CanvasTexture(cv);
       }
@@ -243,9 +246,9 @@ export class Effects {
         let m = this.beams.get(b);
         if (!m) {
           // луч на дороге: короткий и узкий, чтобы не вылезал за бортики
-          const [w, l] = soft ? [7, 11] : [5, 10];
+          const [w, l] = soft ? [6, 13] : [5, 10];
           m = new THREE.Mesh(new THREE.PlaneGeometry(w, l), new THREE.MeshBasicMaterial({ map: this.beamTex, transparent: true, opacity: soft ? 0.8 : 0.7, depthWrite: false, blending: THREE.AdditiveBlending }));
-          m.geometry.rotateX(-Math.PI / 2); m.geometry.translate(0, 0, -l / 2 + (soft ? 2 : 0)); this.group.add(m); this.beams.set(b, m);
+          m.geometry.rotateX(-Math.PI / 2); m.geometry.translate(0, 0, -l / 2); this.group.add(m); this.beams.set(b, m);
         }
         m.position.set(b.x + Math.cos(b.a) * b.s.radius, b.mesh.position.y + 0.12, b.z + Math.sin(b.a) * b.s.radius);
         m.rotation.y = -b.a - Math.PI / 2; seen.add(b);
