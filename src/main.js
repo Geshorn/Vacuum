@@ -77,7 +77,7 @@ let countdown = null;
 const COUNT_STEP = 600;   // мс на каждую цифру отсчёта (в css — анимация #count той же длины)
 function setPause(on) {
   if (on) {
-    if (mode !== 'race' && mode !== 'out') return;
+    if (mode !== 'race') return;   // только в гонке: на экране «Выбыл», итогах и в меню пауза не нужна
     stopCountdown();
     if (!isPaused()) pauseClock();
     hud.pause(true);
