@@ -178,7 +178,9 @@ export class Menu {
   // Цвет корпуса: кружки палитры, первый — родной цвет этого робота
   buildPaint(spec) {
     const cur = paintOf(spec.id);
-    this.paint.innerHTML = PAINTS.map((c, i) =>
+    // цвет палитры, совпадающий с родным, не показываем — его уже даёт первый кружок
+    const same = c => c && c.toLowerCase() === spec.color.toLowerCase();
+    this.paint.innerHTML = PAINTS.map((c, i) => same(c) ? '' :
       `<button data-i="${i}" class="${(c || null) === cur ? 'on' : ''}${c ? '' : ' native'}" title="${c ? c : 'Родной цвет'}" style="background:${c || spec.color}"></button>`).join('');
   }
 
@@ -221,7 +223,11 @@ export class Menu {
     const c = e.code;
     if (c === 'Enter' || c === 'Space') { e.preventDefault(); this.pick(); }
     else if (c === 'KeyR') this.random();
-    else if (c === 'KeyC') this.setPaint(PAINTS.indexOf(paintOf(LIST[this.index].id)) + (e.shiftKey ? -1 : 1));
+    else if (c === 'KeyC') {
+      const spec = LIST[this.index], list = PAINTS.filter(p => !p || p.toLowerCase() !== spec.color.toLowerCase());
+      const n = list.length, i = (list.indexOf(paintOf(spec.id)) + (e.shiftKey ? n - 1 : 1)) % n;
+      this.setPaint(PAINTS.indexOf(list[i]));
+    }
     else if (c === 'Digit1' || c === 'Digit2' || c === 'Digit3') this.setDifficulty(Object.keys(DIFFICULTY)[+c.slice(-1) - 1]);
     else if (c === 'Minus' || c === 'NumpadSubtract') this.setRivals(settings.rivals - 1);
     else if (c === 'Equal' || c === 'NumpadAdd') this.setRivals(settings.rivals + 1);
