@@ -44,7 +44,6 @@ export class MapMenu {
         <div class="m-keys">←/→ — трасса · Enter — дальше · 1/2/3 — сложность · −/+ — соперники</div>
       </div>
       <div class="m-card">
-        <canvas id="mp-view" width="420" height="300"></canvas>
         <div class="m-name"><b id="mp-name"></b><span id="mp-len"></span></div>
         <div class="mp-desc" id="mp-desc"></div>
         <div class="m-set">
@@ -71,7 +70,7 @@ export class MapMenu {
     settings.map = id; saveSettings();
     const M = MAPS[id];
     this.onSelect(id);
-    // превью: снимок загруженной карты сверху (запоминаем для карточки), пока снимка нет — схема трассы
+    // превью в карточке: снимок загруженной карты сверху, пока снимка нет — схема трассы
     this.shots ||= {};
     if (this.snapshot) this.shots[id] = this.snapshot();
     const paint = (cv, mid) => {
@@ -79,7 +78,6 @@ export class MapMenu {
       if (sh) cv.getContext('2d').drawImage(sh, 0, 0, cv.width, cv.height); else drawTrack(cv, MAPS[mid].points, mid === id);
     };
     [...this.grid.children].forEach(b => { b.classList.toggle('on', b.dataset.id === id); paint(b.querySelector('canvas'), b.dataset.id); });
-    paint(this.el.querySelector('#mp-view'), id);
     this.el.querySelector('#mp-name').textContent = M.name;
     this.el.querySelector('#mp-desc').textContent = M.desc;
     // длина круга — у загруженной трассы (в «метрах»: 1 ед ≈ 2.5 см, как в описании скоростей)
