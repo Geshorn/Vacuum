@@ -104,9 +104,11 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) setPa
 hud.onPause(() => setPause(false), quitPause);
 
 addEventListener('keydown', e => {
-  if (e.code === 'KeyP' || e.code === 'Pause') { setPause(!isPaused() || !!countdown); return; }   // P во время отсчёта — снова пауза
+  // P / Esc — пауза и обратно (во время отсчёта — снова пауза); Esc вне гонки работает как раньше
+  const toggle = e.code === 'KeyP' || e.code === 'Pause' || (e.code === 'Escape' && (mode === 'race' || isPaused()));
+  if (toggle) { e.preventDefault(); setPause(!isPaused() || !!countdown); return; }
   if (isPaused()) {
-    if (e.code === 'Escape') quitPause();
+    if (e.code === 'KeyM') quitPause();
     else if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); setPause(false); }
     return;
   }
@@ -122,7 +124,7 @@ addEventListener('keydown', e => {
     if (combat.fire(bot, performance.now() / 1000)) { hud.weapon(null); hud.say(P['fire_' + w], 1200); }
     else hud.say(P.binEmpty, 1600);
   }
-  if (e.code === 'Escape' && (mode === 'race' || mode === 'out')) toMenu();
+  if (e.code === 'Escape' && mode === 'out') toMenu();
   else if (e.code === 'Enter' && mode === 'out' && boom?.t > 1) startRace(bot.spec.id);
 });
 combat.onRocket = tg => { if (tg && tg === bot) hud.say(P.rocketWarn, 1800); };
