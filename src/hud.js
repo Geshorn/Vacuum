@@ -120,6 +120,8 @@ export const hud = {
     $('results').classList.add('on'); this.hideHint();
   },
   hideResults() { $('results').classList.remove('on'); },
+  pause(on) { $('pause').classList.toggle('on', on); },
+  onPause(resume, menu) { $('p-go').onclick = resume; $('p-menu').onclick = menu; },
 
   // Экран «Выбыл» после взрыва
   onOut(again, menu) { $('o-again').onclick = again; $('o-menu').onclick = menu; },

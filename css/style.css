@@ -115,6 +115,11 @@ body.in-menu #minimap,body.in-menu #speed,body.in-menu #say,body.in-menu #hint{d
 .r-table tr.out td{opacity:.45}
 .r-table tr.first td:nth-child(2)::before{content:"🏆 "}
 body.in-menu #results{display:none}
+#pause{position:fixed;inset:28px 0 0;z-index:58;display:flex;align-items:center;justify-content:center;pointer-events:none;opacity:0;transition:opacity .2s;
+  background:radial-gradient(ellipse at 50% 45%,rgba(20,3,12,.25),rgba(20,3,12,.75))}
+#pause.on{opacity:1;pointer-events:auto}
+#pause .o-card{text-align:center;min-width:340px}
+#pause .m-btns button{white-space:nowrap}
 .o-card{text-align:center;padding:22px 18px 16px;transform:scale(.9);transition:transform .5s}
 #out.on .o-card{transform:none}
 .o-card h1{margin:0;font-size:38px;letter-spacing:1px;background:linear-gradient(90deg,#ffd166,#ff3b4e);-webkit-background-clip:text;background-clip:text;color:transparent}

@@ -1,3 +1,4 @@
+import { isPaused, pauseClock, resumeClock } from './clock.js';   // первым: подменяет performance.now
 import { C } from './config.js';
 import { ROBOTS, PLAYER_ROBOT } from './robots.js';
 import { P } from './phrases.js';
@@ -67,7 +68,23 @@ function startRace(id) {
 const menu = new Menu(startRace);
 menu.show(PLAYER_ROBOT);
 function toMenu() { clearBoom(); hud.hideOut(); hud.hideResults(); mode = 'menu'; menu.show(bot.spec.id); }
+// ── Пауза: P / Pause, или окно ушло в фон. Esc на паузе — в меню ──
+function setPause(on) {
+  if (on === isPaused() || (on && mode !== 'race' && mode !== 'out')) return;
+  if (on) pauseClock(); else { resumeClock(); input.keys = {}; }
+  hud.pause(on);
+}
+addEventListener('blur', () => setPause(true));
+document.addEventListener('visibilitychange', () => { if (document.hidden) setPause(true); });
+hud.onPause(() => setPause(false), () => { setPause(false); toMenu(); });
+
 addEventListener('keydown', e => {
+  if (e.code === 'KeyP' || e.code === 'Pause') { setPause(!isPaused()); return; }
+  if (isPaused()) {
+    if (e.code === 'Escape') { setPause(false); toMenu(); }
+    else if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); setPause(false); }
+    return;
+  }
   if (mode === 'done') {                            // экран итогов
     if (e.code === 'Escape') toMenu();
     else if (e.code === 'Enter' && performance.now() - race.doneAt > 800) startRace(bot.spec.id);
@@ -458,7 +475,9 @@ function bumps(t) {
 }
 
 let last = 0;
-function loop(t) {
+function loop() {
+  const t = performance.now();   // игровое время (стоит на паузе), см. clock.js
+  if (isPaused()) { world.render(); requestAnimationFrame(loop); return; }
   const dt = Math.min((t - last) / 1000 || 0, 0.05); last = t;
   if (mode === 'race' || mode === 'done') {          // done — экран итогов, а гонка вокруг продолжается
     update(t, dt);
