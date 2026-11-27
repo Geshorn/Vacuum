@@ -219,6 +219,8 @@ export class Robot {
       this.pitch = dt > 0 && this.pitch != null ? this.pitch + (pitch - this.pitch) * Math.min(1, dt * 12) : pitch;
       pitch = this.pitch;
     }
+    // упал в ров — быстро уходит под воду (ниже пола его не видно)
+    if (this.ditch) { this.sink = Math.min(1, (this.sink || 0) + dt * 2.5); y = -3 * this.sink; } else this.sink = 0;
     // приземление: корпус на мгновение проседает
     if (this.land > 0) { this.land = Math.max(0, this.land - dt); this.mesh.scale.y = 1 - Math.sin(this.land / 0.25 * Math.PI) * 0.18; }
     else if (this.mesh.scale.y !== 1) this.mesh.scale.y = 1;

@@ -437,6 +437,20 @@ function updateRivals(t, dt) {
     if (who === bot) { hud.weapon(w); hud.say([WEAPONS[w].icon + ' ' + WEAPONS[w].name + '!'], 1400); }
   }, chooseWeapon);
   const now = t / 1000;
+  // ров за трамплином: кто не перелетел (едет по земле в зоне рва) — тонет, через 2 с переносится за ров
+  if (track.jump?.ditch) for (const b of list) {
+    if (b.ditch) {
+      if (now < b.ditch.until) { b.v = 0; b.lat = 0; b.x = b.ditch.x; b.z = b.ditch.z; continue; }
+      const J = track.jump, seg = track.at(J.at + J.ditch + 4), lat = Math.max(-track.half + 2, Math.min(track.half - 2, track.lateral(b.seg, b.x, b.z)));
+      const [x, , z] = track.edge(seg, lat);
+      combat.poof(x, z);
+      b.x = x; b.z = z; b.seg = seg; b.a = Math.atan2(track.t[seg].z, track.t[seg].x); b.lat = 0; b.v = b.s.maxSpeed * 0.45; b.ditch = null;
+      if (b.rival) b.rival.race.lastSeg = seg; else race.lastSeg = seg;
+    } else if (!b.air && b.mesh.visible && track.isDitch(b.seg)) {
+      b.ditch = { until: now + 2, x: b.x, z: b.z };
+      if (b === bot) hud.say(P.ditch, 1800); else if (b.rival) chat.say(b.rival, RP.ditch, bot, { force: true });
+    }
+  }
   // помехи самой карты (в саду — дождеватели): кого окатило — реплика
   kitchen.affect?.(list, now, who => {
     if (who === bot) hud.say(P.wet, 1400);
@@ -596,6 +610,7 @@ function loop() {
     hud.drawMap(bot, rivals);
     hud.placeSay(bot, world.camera);
     rivalTalk(); chat.update(world.camera);
+    kitchen.focus?.(bot, dt);
   } else if (mode === 'out') {
     // робот взорвался: камера стоит на месте взрыва и трясётся
     boom.update(dt);

@@ -52,6 +52,9 @@ export class Track {
     this.hasHeight = !!(B || J);
   }
 
+  // Ров сразу за краем трамплина: сегменты 1..ditch после края
+  isDitch(i) { const J = this.jump; if (!J?.ditch) return false; const k = (i - J.at + this.n) % this.n; return k >= 1 && k <= J.ditch; }
+
   // Трамплин: деревянные борта-клинья под въездом и стенка обрыва
   buildJump() {
     const J = this.jump, w = this.half + C.wallThick;
@@ -74,6 +77,30 @@ export class Track {
     const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.12, this.half * 2), new THREE.MeshStandardMaterial({ color: '#ffca28' }));
     const p = this.p[lip], t = this.t[lip];
     stripe.position.set(p.x, J.height + 0.08, p.z); stripe.rotation.y = -Math.atan2(t.z, t.x); this.group.add(stripe);
+    if (J.ditch) this.buildDitch();
+  }
+
+  // Ров: тёмная вода во всю ширину дороги, по краям — земляные откосы (картинка поверх дороги; робот «тонет» ниже пола)
+  buildDitch() {
+    const J = this.jump, cv = document.createElement('canvas'); cv.width = 64; cv.height = 128;
+    const x = cv.getContext('2d'), gr = x.createLinearGradient(0, 0, 0, 128);
+    gr.addColorStop(0, '#5a3d27'); gr.addColorStop(0.14, '#2b1c12'); gr.addColorStop(0.22, '#16323d'); gr.addColorStop(0.5, '#0b1f29');
+    gr.addColorStop(0.78, '#16323d'); gr.addColorStop(0.86, '#2b1c12'); gr.addColorStop(1, '#5a3d27');
+    x.fillStyle = gr; x.fillRect(0, 0, 64, 128);
+    x.strokeStyle = 'rgba(160,220,255,.25)'; x.lineWidth = 1.5;
+    for (let k = 0; k < 6; k++) { x.beginPath(); const y = 40 + k * 9; x.moveTo(5, y); x.bezierCurveTo(20, y - 3, 44, y + 3, 59, y); x.stroke(); }
+    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+    const w = this.half + C.wallThick, pos = [], uv = [], idx = [];
+    for (let k = 0; k <= J.ditch; k++) {
+      const [ax, , az] = this.edge(this.at(J.at + k), w), [bx, , bz] = this.edge(this.at(J.at + k), -w);
+      const f = k / J.ditch; pos.push(ax, 0.07, az, bx, 0.07, bz); uv.push(0, f, 1, f);
+      if (k > 0) { const b = (k - 1) * 2; idx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2); }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.setIndex(idx); g.computeVertexNormals();
+    const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.25, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 }));
+    m.receiveShadow = true; this.group.add(m);
   }
 
   // Высота дороги и наклон (подъём на единицу длины по ходу трассы) в сегменте i

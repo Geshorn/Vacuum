@@ -162,7 +162,7 @@ export class Garden extends Kitchen {
   // ── Внутри: холм с тоннелем, дождеватели, пруд, деревья, мебель для отдыха ─────
   placeInterior() {
     const R = this.room, t = this.track;
-    if (t.tunnel) this.tunnelHill(t.tunnel);
+    if (t.tunnel) this.tunnelLog(t.tunnel);
     this.sprinklers = [];
     const cx = t.p.reduce((s, p) => s + p.x, 0) / t.n, cz = t.p.reduce((s, p) => s + p.z, 0) / t.n;
     const list = [
@@ -184,38 +184,59 @@ export class Garden extends Kitchen {
     this.placeVignettes();
   }
 
-  // Травяной холм над участком трассы с каменными порталами на въезде и выезде
-  tunnelHill(T) {
-    const t = this.track, n = T.len, half = Math.floor(n / 2), W = t.half + C.wallThick + 1, H = 9;
-    const pos = [], idx = [], seg = 14;
-    for (let k = -half; k <= half; k++) {
-      const i = t.at(T.at + k), e = Math.min(1, (half - Math.abs(k)) / 4);         // к краям холм ниже
-      for (let s = 0; s <= seg; s++) {
-        const a = s / seg * Math.PI, off = Math.cos(a) * (W + 8 * e), y = Math.sin(a) * (H * (0.55 + 0.45 * e));
-        pos.push(...t.edge(i, off, y));
+  // Тоннель — поваленный ствол дерева: полый, кора снаружи, светлая древесина внутри, годовые кольца на торцах,
+  // мох и грибы сверху. Когда игрок внутри — ствол становится полупрозрачным (см. focus)
+  tunnelLog(T) {
+    const t = this.track, half = Math.floor(T.len / 2), Rr = t.half + C.wallThick + 1.8, yc = Rr - 1.4;
+    const pts = [];
+    for (let k = -half - 2; k <= half + 2; k++) { const p = t.p[t.at(T.at + k)]; pts.push(new THREE.Vector3(p.x, yc, p.z)); }
+    const curve = new THREE.CatmullRomCurve3(pts);
+    const S = 128, cv = document.createElement('canvas'); cv.width = cv.height = S; const x = cv.getContext('2d');
+    x.fillStyle = '#6d4c33'; x.fillRect(0, 0, S, S);
+    for (let k = 0; k < 40; k++) { x.strokeStyle = `rgba(${30 + Math.random() * 30},${18 + Math.random() * 15},10,0.55)`; x.lineWidth = 1 + Math.random() * 3; x.beginPath(); const y = Math.random() * S; x.moveTo(0, y); x.bezierCurveTo(S * 0.3, y + rnd2(-6, 6), S * 0.7, y + rnd2(-6, 6), S, y + rnd2(-3, 3)); x.stroke(); }
+    const bark = new THREE.CanvasTexture(cv); bark.wrapS = bark.wrapT = THREE.RepeatWrapping; bark.repeat.set(T.len / 6, 4); bark.colorSpace = THREE.SRGBColorSpace;
+    const mats = [];
+    const M = o => { const m = new THREE.MeshStandardMaterial({ roughness: 0.95, transparent: true, opacity: 1, ...o }); mats.push(m); return m; };
+    const lg = new THREE.Group(); lg.userData.dynamic = true; this.g.add(lg);   // не склеивать — материалы меняют прозрачность
+    const outer = new THREE.Mesh(new THREE.TubeGeometry(curve, T.len * 2, Rr, 24, false), M({ map: bark, flatShading: true }));
+    outer.castShadow = true; lg.add(outer);
+    lg.add(new THREE.Mesh(new THREE.TubeGeometry(curve, T.len * 2, Rr - 1.1, 24, false), M({ color: '#d7b488', side: THREE.BackSide })));
+    // торцы: кольцо с годовыми кольцами
+    const rc = document.createElement('canvas'); rc.width = rc.height = 128; const r = rc.getContext('2d');
+    for (let k = 0; k < 10; k++) { r.fillStyle = k % 2 ? '#c9a172' : '#b08550'; r.beginPath(); r.arc(64, 64, 64 - k * 2.4, 0, 7); r.fill(); }
+    const ringTex = new THREE.CanvasTexture(rc); ringTex.colorSpace = THREE.SRGBColorSpace;
+    for (const u of [0, 1]) {
+      const p = curve.getPointAt(u), tg = curve.getTangentAt(u);
+      const ring = new THREE.Mesh(new THREE.RingGeometry(Rr - 1.1, Rr + 0.05, 32), M({ map: ringTex, side: THREE.DoubleSide }));
+      ring.position.copy(p); ring.lookAt(p.clone().add(tg)); lg.add(ring);
+    }
+    // мох, грибы и сучок с листьями сверху
+    const moss = M({ color: '#7cb342', flatShading: true }), cap = M({ color: '#ff7043' }), stem = M({ color: '#fff3e0' }), leaf = M({ color: '#43a047', flatShading: true });
+    for (let k = 0; k < 9; k++) {
+      const p = curve.getPointAt(0.08 + k / 10 * 0.84), m = new THREE.Mesh(new THREE.IcosahedronGeometry(rnd2(1.5, 2.6), 0), moss);
+      m.position.set(p.x + rnd2(-2, 2), p.y + Rr - 0.6, p.z + rnd2(-2, 2)); m.scale.y = 0.4; lg.add(m);
+      if (k % 3 === 1) for (let j = 0; j < 3; j++) {
+        const sx = p.x + rnd2(-3, 3), sz = p.z + rnd2(-3, 3), sy = p.y + Rr - 0.2;
+        const st = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.3, 1.4, 6), stem); st.position.set(sx, sy + 0.7, sz); lg.add(st);
+        const c = new THREE.Mesh(new THREE.SphereGeometry(0.9, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), cap); c.position.set(sx, sy + 1.3, sz); lg.add(c);
       }
-      if (k > -half) { const b = (k + half - 1) * (seg + 1); for (let s = 0; s < seg; s++) idx.push(b + s, b + s + seg + 1, b + s + 1, b + s + 1, b + s + seg + 1, b + s + seg + 2); }
     }
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
-    const hill = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: '#5fae45', roughness: 1, side: THREE.DoubleSide, flatShading: true }));
-    hill.castShadow = hill.receiveShadow = true; this.g.add(hill);
-    // каменные арки на концах
-    for (const k of [-half, half]) {
-      const i = t.at(T.at + k), p = t.p[i], tg = t.t[i];
-      const arch = new THREE.Mesh(new THREE.TorusGeometry(W + 0.5, 1.2, 6, 16, Math.PI), G.stone);
-      arch.position.set(p.x, 0, p.z); arch.rotation.y = -Math.atan2(tg.z, tg.x) + Math.PI / 2; arch.scale.y = H * 0.55 / (W + 0.5); arch.castShadow = true; this.g.add(arch);
-    }
-    // цветы и кустики на холме
-    for (let k = 0; k < 18; k++) {
-      const i = t.at(T.at + Math.round(rnd2(-half + 3, half - 3))), off = rnd2(-W, W), a = Math.acos(Math.max(-1, Math.min(1, off / (W + 8))));
-      const [x, y, z] = t.edge(i, off, Math.sin(a) * H);
-      if (Math.random() < 0.5) this.flower(this.g, x, y - 0.2, z, pickF(), 1.2);
-      else { const b = new THREE.Mesh(new THREE.IcosahedronGeometry(1.4, 0), G.hedge); b.position.set(x, y + 0.4, z); this.g.add(b); }
-    }
-    // холм — «занятое» место, чтобы туда ничего не ставили
-    const mid = t.p[t.at(T.at)];
-    this.taken.push({ x: mid.x, z: mid.z, hw: n * C.sampleStep / 2 + 6, hd: n * C.sampleStep / 2 + 6, flat: false });
+    const mid = curve.getPointAt(0.55), br = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.4, 9, 8), M({ map: bark }));
+    br.position.set(mid.x + 2, mid.y + Rr + 3, mid.z); br.rotation.z = -0.6; lg.add(br);
+    for (let k = 0; k < 4; k++) { const l = new THREE.Mesh(new THREE.IcosahedronGeometry(2, 1), leaf); l.position.set(mid.x + 5 + rnd2(-1.5, 1.5), mid.y + Rr + 7 + rnd2(-1, 1), mid.z + rnd2(-2, 2)); lg.add(l); }
+    this.log = { mats, op: 1, from: t.at(T.at - half - 2), len: half * 2 + 4 };
+    const c0 = t.p[t.at(T.at)];
+    this.taken.push({ x: c0.x, z: c0.z, hw: T.len * C.sampleStep / 2 + 8, hd: T.len * C.sampleStep / 2 + 8, flat: false });
+  }
+
+  // Каждый кадр из main.js: игрок в стволе — ствол прозрачнеет, выехал — снова плотный
+  focus(bot, dt) {
+    const L = this.log; if (!L || !bot) return;
+    const inside = bot.mesh.visible && ((bot.seg - L.from + this.track.n) % this.track.n) <= L.len;
+    const want = inside ? 0.22 : 1;
+    if (Math.abs(L.op - want) < 0.005) return;
+    L.op += (want - L.op) * Math.min(1, dt * 6);
+    for (const m of L.mats) { m.opacity = L.op; m.depthWrite = L.op > 0.95; }
   }
 
   // ── Дождеватели: стоят у бортика, струя крутится и заливает дорогу ──────────────
@@ -239,21 +260,31 @@ export class Garden extends Kitchen {
     this.cyl(0.25, 0.25, 2, G.steel, 0, 1.3, 0, g, 8);
     const head = new THREE.Group(); head.position.y = 2.4; g.add(head); head.userData.dynamic = true;
     this.box(0.5, 0.5, 2.4, G.yellow, 0, 0, 0, head);
-    // струя: цепочка капель по параболе, вылетает в сторону трассы
-    const drops = [];
-    for (let k = 0; k < 16; k++) { const d = new THREE.Mesh(new THREE.SphereGeometry(0.35 + k * 0.03, 6, 4), G.spray); head.add(d); drops.push(d); }
-    const S = { x, z, seg, head, drops, a: 0, reach: 14, spread: 0.5, swing: Math.random() * 6 };
+    // струя: тонкая прозрачная дуга воды, по ней бегут мелкие капли, на дороге — брызги и расходящиеся круги
+    const reach = 14, arcY = f => 3 * Math.sin(f * Math.PI) * (1 - 0.3 * f) - 2.3 * f;
+    const arcPts = []; for (let k = 0; k <= 20; k++) { const f = k / 20; arcPts.push(new THREE.Vector3(0, arcY(f), f * reach)); }
+    const jetMat = new THREE.MeshBasicMaterial({ color: '#d6f1ff', transparent: true, opacity: 0.55, depthWrite: false });
+    head.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(arcPts), 30, 0.22, 6), jetMat));
+    const dropMat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.85, depthWrite: false });
+    const dropGeo = new THREE.SphereGeometry(0.22, 5, 4), drops = [];
+    for (let k = 0; k < 26; k++) { const d = new THREE.Mesh(dropGeo, dropMat); d.userData.j = [rnd2(-0.25, 0.25), rnd2(-0.2, 0.2), Math.random()]; head.add(d); drops.push(d); }
+    const splashMat = new THREE.MeshBasicMaterial({ color: '#e3f6ff', transparent: true, opacity: 0.5, depthWrite: false, side: THREE.DoubleSide });
+    const rings = [0, 1, 2].map(() => { const r = new THREE.Mesh(new THREE.RingGeometry(0.6, 0.85, 20), splashMat.clone()); r.rotation.x = -Math.PI / 2; head.add(r); return r; });
+    const bits = []; for (let k = 0; k < 8; k++) { const b = new THREE.Mesh(dropGeo, dropMat); head.add(b); bits.push({ m: b, a: k / 8 * 6.28, ph: Math.random() }); }
+    const S = { x, z, seg, head, a: 0, reach, swing: Math.random() * 6 };
     // струя качается туда-сюда поперёк трассы (как у осциллирующей поливалки)
-    const t = this.track, tg = t.t[seg], nrm = t.nrm[seg], toward = Math.atan2(-side * nrm.z, -side * nrm.x);
-    S.base = toward;
+    const t = this.track, nrm = t.nrm[seg];
+    S.base = Math.atan2(-side * nrm.z, -side * nrm.x);
+    const endY = arcY(1);
     this.anim.push(time => {
       S.a = S.base + Math.sin(time * 0.9 + S.swing) * 0.9;
       head.rotation.y = -S.a + Math.PI / 2;
-      drops.forEach((d, k) => {
-        const f = ((time * 1.4 + k / drops.length) % 1), r = f * S.reach;
-        d.position.set(0, 2.5 * Math.sin(f * Math.PI) - 1.6 * f, r);
-        d.scale.setScalar(0.6 + f * 1.4); d.visible = f > 0.05;
+      drops.forEach(d => {
+        const [jx, jy, ph] = d.userData.j, f = (time * 1.1 + ph) % 1;
+        d.position.set(jx * f * 3, arcY(f) + jy * f * 2, f * reach); d.visible = f > 0.03;
       });
+      rings.forEach((r, k) => { const f = (time * 1.3 + k / 3) % 1; r.position.set(0, endY + 0.05, reach); r.scale.setScalar(0.6 + f * 2.6); r.material.opacity = 0.55 * (1 - f); });
+      bits.forEach(b => { const f = (time * 2.2 + b.ph) % 1; b.m.position.set(Math.cos(b.a) * f * 1.6, endY + Math.sin(f * Math.PI) * 1.1, reach + Math.sin(b.a) * f * 1.6); });
     });
     this.sprinklers.push(S);
   }
