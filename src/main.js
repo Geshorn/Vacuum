@@ -38,8 +38,9 @@ function startRace(id) {
   if (bot) world.scene.remove(bot.mesh);
   clearBoom(); hud.hideOut();
   bot = new Robot(world.scene, painted(ROBOTS[id]));   // с выбранной в меню окраской
-  // Стартовая решётка: по два в ряд за линией старта; игрок — во втором ряду слева
-  const slot = k => [-6 - Math.floor(k / 2) * 8, k % 2 ? -3.5 : 3.5];
+  // Стартовая решётка: все в колонну по центру трассы за линией старта, игрок — третьим.
+  // Шаг 3 сегмента ≈ 5.2 ед: даже два самых больших (Сейф, R ≈ 2) стоят не касаясь
+  const slot = k => [-4 - k * 3, 0];
   const [ps, pl] = slot(2), s0 = track.at(ps), [px, , pz] = track.edge(s0, pl);
   bot.x = px; bot.z = pz; bot.a = Math.atan2(track.t[s0].z, track.t[s0].x); bot.seg = s0;
   race = { lap: 0, lapStart: 0, best: 0, started: false, lastSeg: s0, tokens: 0, earned: 0, collected: 0, crossings: 0,
