@@ -52,6 +52,8 @@ function subwayTexture() {
   const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; return t;
 }
 
+export { M, mat, DEPTH, GAP, GAP_IN, COUNTER_H, rnd2 };
+
 export class Kitchen {
   constructor(scene, track) {
     this.track = track; this.taken = []; this.anim = [];
@@ -474,7 +476,7 @@ export class Kitchen {
   // Небольшие уютные сценки по всему кругу: идём вдоль трассы и через каждые ~40 ед пробуем поставить
   // что-нибудь то с одной, то с другой стороны дороги
   placeVignettes() {
-    const t = this.track, V = Object.entries(VIGNETTES);
+    const t = this.track, V = Object.entries(this.vignettes || VIGNETTES);   // у других карт — свой набор сценок
     let k = Math.floor(Math.random() * V.length);
     for (let i = 0; i < t.n; i += 16) for (const sd of (i / 16) % 2 ? [1, -1] : [-1, 1]) {
       // пробуем несколько сценок по очереди, пока какая-нибудь не влезет

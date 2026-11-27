@@ -1,10 +1,11 @@
 import * as THREE from 'three';
-import { C, TRACK_POINTS } from './config.js';
+import { C } from './config.js';
 
 // Замкнутая трасса: центральная линия разбита на сегменты, у каждого есть точка, направление и нормаль (влево).
 export class Track {
-  constructor(scene) {
-    const curve = new THREE.CatmullRomCurve3(TRACK_POINTS.map(([x, z]) => new THREE.Vector3(x, 0, z)), true, 'centripetal');
+  // points — опорные точки центральной линии [x, z] (из maps.js), трасса замкнута
+  constructor(scene, points) {
+    const curve = new THREE.CatmullRomCurve3(points.map(([x, z]) => new THREE.Vector3(x, 0, z)), true, 'centripetal');
     this.length = curve.getLength();
     const n = Math.round(this.length / C.sampleStep);
     const pts = curve.getSpacedPoints(n).slice(0, n);   // последняя точка совпадает с первой

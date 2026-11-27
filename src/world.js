@@ -34,6 +34,29 @@ export class World {
     addEventListener('resize', () => this.resize());
   }
 
+  // Цвет неба/дымки под карту (у каждой комнаты своя гамма)
+  setSky(color) { this.scene.background.set(color); this.scene.fog.color.set(color); }
+
+  // Снимок карты сверху для превью в меню: камера над серединой трассы, вся трасса в кадре.
+  // Рендерим во временную камеру и сразу копируем картинку (до следующего кадра буфер ещё не очищен).
+  snapshot(track, w = 420, h = 300) {
+    const xs = track.p.map(p => p.x), zs = track.p.map(p => p.z);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), z0 = Math.min(...zs), z1 = Math.max(...zs);
+    const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, cam = new THREE.PerspectiveCamera(38, w / h, 1, 1200);
+    const t = Math.tan(THREE.MathUtils.degToRad(19));
+    const dist = Math.max((x1 - x0 + 30) / (w / h), z1 - z0 + 30) / (2 * t) * 1.25;
+    cam.position.set(cx, dist * 0.92, cz + dist * 0.4); cam.lookAt(cx, 0, cz);
+    const fog = this.scene.fog; this.scene.fog = null;
+    this.sun.position.set(cx - 40, 120, cz + 30); this.sun.target.position.set(cx, 0, cz);
+    this.renderer.render(this.scene, cam);
+    this.scene.fog = fog;
+    const src = this.renderer.domElement, out = document.createElement('canvas'); out.width = w; out.height = h;
+    const sa = src.width / src.height, da = w / h;
+    const sw = sa > da ? src.height * da : src.width, sh = sa > da ? src.height : src.width / da;
+    out.getContext('2d').drawImage(src, (src.width - sw) / 2, (src.height - sh) / 2, sw, sh, 0, 0, w, h);
+    return out;
+  }
+
   resize() {
     const w = innerWidth, h = innerHeight;
     this.renderer.setSize(w, h);

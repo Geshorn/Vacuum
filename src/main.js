@@ -10,10 +10,11 @@ import { Robot } from './robot.js';
 import { hud } from './hud.js';
 import { Skids } from './skids.js';
 import { Menu } from './menu.js';
+import { MapMenu } from './mapmenu.js';
 import { Explosion } from './explosion.js';
 import { Smoke } from './smoke.js';
 import { Trash } from './trash.js';
-import { Kitchen } from './kitchen.js';
+import { MAPS } from './maps.js';
 import { Rival } from './rivals.js';
 import { collideRobots } from './collide.js';
 import { Pickups, WEAPONS } from './pickups.js';
@@ -21,19 +22,42 @@ import { Combat } from './weapons.js';
 import { settings, painted } from './settings.js';
 
 const world = new World(document.getElementById('game'));
-const track = new Track(world.scene);
-const kitchen = new Kitchen(world.scene, track);
 const skids = new Skids(world.scene);
 const smoke = new Smoke(world.scene);
-const trash = new Trash(world.scene, track);
-const pickups = new Pickups(world.scene, track);
-const combat = new Combat(world.scene, track);
 const chat = new Chatter();   // реплики соперников
-hud.initMap(track);
+// Всё, что зависит от карты: трасса, обстановка, мусор, коробки с оружием, снаряды. Пересоздаётся при смене карты
+let track, kitchen, trash, pickups, combat, mapId = null;
 hud.clock(); setInterval(() => hud.clock(), 30000);
 
 let bot = null, race = null, st = null, mode = 'menu', rivals = [];
-window.__game = { track, skids, trash, world, kitchen, combat };   // для отладки из консоли
+
+const ghost = { x: 0, z: 0, a: 0, v: 0, lat: 0, i: 0 };   // «призрак», за которым летит камера в меню
+// Загрузить карту id (см. maps.js): старую убрать со сцены и освободить память видеокарты, новую построить
+function loadMap(id) {
+  if (!MAPS[id]) id = 'kitchen';
+  if (id === mapId) return;
+  for (const g of [track?.group, kitchen?.g, trash?.group, pickups?.group, combat?.group]) if (g) {
+    world.scene.remove(g);
+    g.traverse(o => { o.geometry?.dispose(); });
+  }
+  for (const r of rivals) r.dispose();
+  rivals = [];
+  if (bot) { world.scene.remove(bot.mesh); bot = null; }
+  const M = MAPS[id];
+  track = new Track(world.scene, M.points);
+  kitchen = new M.Scenery(world.scene, track);
+  trash = new Trash(world.scene, track);
+  pickups = new Pickups(world.scene, track);
+  combat = new Combat(world.scene, track);
+  combat.onRivalFire = r => chat.say(r, RP.fire, bot);
+  combat.onRocket = tg => { if (tg && tg === bot) hud.say(P.rocketWarn, 1800); };
+  world.setSky(M.sky);
+  hud.initMap(track);
+  skids.clear(); smoke.clear();
+  ghost.i = 0;
+  mapId = id;
+  window.__game = { track, skids, trash, world, kitchen, combat, mapId };   // для отладки из консоли
+}
 
 // Гонка с выбранным роботом: старт чуть позади линии, носом по ходу трассы
 function startRace(id) {
@@ -71,8 +95,14 @@ function startRace(id) {
   clearTimeout(startRace.hintT); startRace.hintT = setTimeout(() => hud.hideHint(), 9000);
 }
 
-const menu = new Menu(startRace);
-menu.show(PLAYER_ROBOT);
+// Меню: сначала трасса и настройки, потом робот. Из выбора робота Esc / «← Трасса» — обратно
+let lastRobot = PLAYER_ROBOT;
+const menu = new Menu(id => { lastRobot = id; startRace(id); }, () => { menu.hide(); mapMenu.show(); });
+const mapMenu = new MapMenu(loadMap, () => { mapMenu.hide(); menu.show(lastRobot); });
+mapMenu.lengthOf = () => track.length;
+mapMenu.snapshot = () => world.snapshot(track);
+loadMap(settings.map);
+mapMenu.show();
 function toMenu() { chat.clear(); clearBoom(); hud.hideOut(); hud.hideResults(); mode = 'menu'; menu.show(bot.spec.id); }
 // ── Пауза: Esc в гонке или окно ушло в фон. На паузе M — в меню ──
 // Продолжение — не сразу, а после отсчёта 3-2-1 (часы всё это время стоят)
@@ -134,8 +164,6 @@ addEventListener('keydown', e => {
   if (e.code === 'Escape' && mode === 'out') toMenu();
   else if (e.code === 'Enter' && mode === 'out' && boom?.t > 1) startRace(bot.spec.id);
 });
-combat.onRivalFire = r => chat.say(r, RP.fire, bot);
-combat.onRocket = tg => { if (tg && tg === bot) hud.say(P.rocketWarn, 1800); };
 hud.onOut(() => startRace(bot.spec.id), toMenu);
 hud.onResults(() => startRace(bot.spec.id), toMenu);
 
@@ -207,7 +235,6 @@ function explode(t) {
 }
 
 // Пока открыто меню, камера медленно едет вдоль трассы
-const ghost = { x: 0, z: 0, a: 0, v: 0, lat: 0, i: 0 };
 function menuCamera(dt) {
   ghost.i = (ghost.i + dt * 8) % track.n;
   const p = track.p[Math.floor(ghost.i)];

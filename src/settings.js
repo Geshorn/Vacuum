@@ -23,7 +23,7 @@ export const LAPS = [3, 5, 10, 0];          // 0 — без конца
 export const CLEAN_TIME = [60, 120, 180];   // секунды
 
 const KEY = 'vacuum-rush-settings';
-const DEFAULTS = { difficulty: 'medium', rivals: 4, mode: 'race', laps: 3, cleanTime: 120, colors: {} };
+const DEFAULTS = { difficulty: 'medium', rivals: 4, mode: 'race', laps: 3, cleanTime: 120, colors: {}, map: 'kitchen' };
 
 export const settings = { ...DEFAULTS, ...load() };
 

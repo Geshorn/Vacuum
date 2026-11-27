@@ -53,6 +53,21 @@ body.in-menu .rsay{display:none}
   gap:clamp(10px,2vw,22px);padding:clamp(8px,2vw,24px);overflow:hidden;
   background:radial-gradient(ellipse at 50% 40%,rgba(20,3,12,.35),rgba(20,3,12,.8))}
 body.in-menu #menu{display:flex}
+/* Выбор трассы — тот же вид, что и выбор робота; пока он открыт, меню робота спрятано */
+#maps{position:fixed;inset:28px 0 0;z-index:60;display:none;align-items:center;justify-content:center;gap:clamp(10px,2vw,22px);padding:clamp(8px,2vw,24px);
+  background:radial-gradient(ellipse at 50% 40%,rgba(20,3,12,.35),rgba(20,3,12,.8))}
+body.in-maps #maps{display:flex}
+body.in-maps #menu{display:none}
+.mp-grid{display:grid;grid-template-columns:repeat(2,clamp(130px,16vw,200px));gap:12px;padding:4px}
+.mp-cell{position:relative;padding:6px 6px 8px;border:2px solid rgba(255,255,255,.12);border-radius:14px;cursor:pointer;color:#fff;font:inherit;
+  background:linear-gradient(160deg,rgba(255,138,92,.18),rgba(82,11,37,.5));transition:transform .15s,border-color .15s,box-shadow .15s}
+.mp-cell canvas{display:block;width:100%;height:auto}
+.mp-cell span{display:block;margin-top:4px;font-size:14px;font-weight:600}
+.mp-cell:hover{transform:translateY(-2px);border-color:rgba(255,255,255,.4)}
+.mp-cell.on{border-color:#ff8a5c;box-shadow:0 0 0 2px rgba(255,138,92,.35),0 0 22px rgba(255,90,60,.55)}
+#mp-view{display:block;width:100%;height:auto;aspect-ratio:7/5;border-radius:14px;background:rgba(0,0,0,.2)}
+.mp-desc{padding:0 10px 10px;font-size:13px;opacity:.8;line-height:1.35}
+#maps .m-set{margin:0 4px}
 body.in-menu #minimap,body.in-menu #speed,body.in-menu #say,body.in-menu #hint{display:none}
 .m-panel,.m-card{background:rgba(40,8,24,.62);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
   border:1px solid rgba(255,255,255,.18);border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,.45)}
