@@ -44,6 +44,21 @@ export class Track {
 
   // Высота дороги и наклон (подъём на единицу длины по ходу трассы) в сегменте i
   heightAt(i) { return this.h[this.at(i)]; }
+  // Высота и наклон в точке (x, z) рядом с сегментом i — плавно, между соседними сегментами
+  // (по номеру сегмента высота меняется ступеньками через каждые sampleStep — робот бы подпрыгивал)
+  heightAtPos(i, x, z) { return this.lerpAt(i, x, z, k => this.h[k]); }
+  slopeAtPos(i, x, z) { return this.lerpAt(i, x, z, k => this.slopeAt(k)); }
+  // Где робот между поперечными линиями соседних сегментов a и a+1: da — сколько он проехал за линию a,
+  // db — сколько осталось до линии a+1 (каждое — вдоль своего направления). w = da / (da + db) меняется
+  // непрерывно на любом смещении от центра, в том числе на внутренней и внешней стороне поворота
+  lerpAt(i, x, z, f) {
+    i = this.at(i);
+    const along = k => { const p = this.p[k], t = this.t[k]; return (x - p.x) * t.x + (z - p.z) * t.z; };
+    const a = along(i) >= 0 ? i : this.at(i - 1), b = this.at(a + 1);
+    const da = Math.max(0, along(a)), db = Math.max(0, -along(b));
+    const w = da + db > 1e-6 ? da / (da + db) : 0;
+    return f(a) * (1 - w) + f(b) * w;
+  }
   slopeAt(i) { return (this.h[this.at(i + 1)] - this.h[this.at(i - 1)]) / (2 * C.sampleStep); }
 
   // Опоры моста: плита под дорогой, борта-«балки» и колонны на въезде и съезде (середина пролёта свободна —

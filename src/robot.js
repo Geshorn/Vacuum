@@ -196,9 +196,13 @@ export class Robot {
     // на мосту — выше и с наклоном по ходу подъёма (нос вверх на въезде, вниз на съезде)
     let y = 0, pitch = 0;
     if (ground?.bridge && this.seg != null) {
-      y = ground.heightAt(this.seg);
-      const t = ground.t[ground.at(this.seg)], along = Math.cos(this.a) * t.x + Math.sin(this.a) * t.z;
-      pitch = Math.atan(ground.slopeAt(this.seg)) * along;
+      const sg = ground.nearest(this.x, this.z, this.seg);   // точный сегмент под роботом (this.seg может отставать)
+      y = ground.heightAtPos(sg, this.x, this.z);
+      const t = ground.t[sg], along = Math.cos(this.a) * t.x + Math.sin(this.a) * t.z;
+      pitch = Math.atan(ground.slopeAtPos(sg, this.x, this.z)) * along;
+      // наклон догоняет нужный плавно (без рывков на стыках сегментов), при паузе (dt = 0) — сразу
+      this.pitch = dt > 0 && this.pitch != null ? this.pitch + (pitch - this.pitch) * Math.min(1, dt * 12) : pitch;
+      pitch = this.pitch;
     }
     this.mesh.position.set(this.x, y, this.z);
     this.mesh.rotation.y = -this.a;
