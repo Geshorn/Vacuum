@@ -229,6 +229,7 @@ export class Trash {
     let i, off;
     if (K.spot === 'risky') { const r = this.pickRisky(); i = r.i; off = r.side * (t.half - rnd(1.2, 1.7)); }
     else { i = Math.floor(Math.random() * t.n); off = rnd(-1, 1) * (t.half - 1.5); }
+    if (t.gap?.(i) || t.gap?.(i + 1)) i = t.at(i + (t.jump?.ditch || 0) + 3);   // в пруду на месте разрыва мусора нет
     const [x, y, z] = t.edge(i, off);
     it.x = x; it.z = z; it.alive = true; it.anim = null;
     it.mesh.position.set(x, y, z); it.y0 = y; it.mesh.rotation.y = rnd(0, Math.PI * 2); it.mesh.scale.setScalar(1); it.mesh.visible = true;

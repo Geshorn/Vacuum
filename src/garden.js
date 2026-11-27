@@ -163,6 +163,7 @@ export class Garden extends Kitchen {
   placeInterior() {
     const R = this.room, t = this.track;
     if (t.tunnel) this.tunnelLog(t.tunnel);
+    if (t.jump?.ditch) this.gapPond(t.jump);
     this.sprinklers = [];
     const cx = t.p.reduce((s, p) => s + p.x, 0) / t.n, cz = t.p.reduce((s, p) => s + p.z, 0) / t.n;
     const list = [
@@ -227,6 +228,61 @@ export class Garden extends Kitchen {
     this.log = { mats, op: 1, from: t.at(T.at - half - 2), len: half * 2 + 4 };
     const c0 = t.p[t.at(T.at)];
     this.taken.push({ x: c0.x, z: c0.z, hw: T.len * C.sampleStep / 2 + 8, hd: T.len * C.sampleStep / 2 + 8, flat: false });
+  }
+
+  // Пруд в разрыве трассы за трамплином: вода шире дороги (край трамплина нависает над ней), камни по берегу,
+  // камыш, кувшинки, лягушка на листе. Локальные оси: x — вдоль трассы, z — поперёк
+  gapPond(J) {
+    const t = this.track, step = C.sampleStep, a0 = t.at(J.at), a1 = t.at(J.at + J.ditch + 1);
+    const pa = t.p[a0], pb = t.p[a1], cx = (pa.x + pb.x) / 2, cz = (pa.z + pb.z) / 2;
+    const ang = Math.atan2(pb.z - pa.z, pb.x - pa.x), L = Math.hypot(pb.x - pa.x, pb.z - pa.z);
+    const g = this.group(cx, cz, -ang);
+    const AX = L / 2 + 2.5, AZ = t.half + C.wallThick + 7;      // вдоль: под краем трамплина и чуть под дальний берег
+    const shape = new THREE.Shape(), pts = [];
+    for (let k = 0; k <= 48; k++) {
+      const u = k / 48 * Math.PI * 2, c = Math.cos(u), sn = Math.sin(u), n = 3.2;   // суперэллипс: почти прямоугольный пруд со скруглениями
+      const r = Math.pow(Math.pow(Math.abs(c), n) + Math.pow(Math.abs(sn), n), -1 / n) * (1 + Math.sin(u * 5) * 0.04);
+      const px = c * r * AX, pz = sn * r * AZ; pts.push([px, pz]);
+      k ? shape.lineTo(px, -pz) : shape.moveTo(px, -pz);
+    }
+    const S = 128, cv = document.createElement('canvas'); cv.width = cv.height = S; const x = cv.getContext('2d');
+    const gr = x.createRadialGradient(64, 64, 10, 64, 64, 70); gr.addColorStop(0, '#1f6f99'); gr.addColorStop(1, '#3fa3c9'); x.fillStyle = gr; x.fillRect(0, 0, S, S);
+    x.strokeStyle = 'rgba(255,255,255,.22)'; x.lineWidth = 1.5;
+    for (let k = 0; k < 10; k++) { x.beginPath(); x.arc(Math.random() * S, Math.random() * S, 6 + Math.random() * 14, 0, Math.PI * 0.8); x.stroke(); }
+    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(0.05, 0.05);
+    const water = new THREE.Mesh(new THREE.ShapeGeometry(shape), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.08, metalness: 0.15 }));
+    water.rotation.x = -Math.PI / 2; water.position.y = 0.06; water.receiveShadow = true; g.add(water);
+    // тёмный край у берега
+    const rim = new THREE.Mesh(new THREE.ShapeGeometry(shape), new THREE.MeshStandardMaterial({ color: '#3d2b1f', roughness: 1 }));
+    rim.rotation.x = -Math.PI / 2; rim.position.y = 0.03; rim.scale.set(1.06, 1.08, 1); g.add(rim);
+    // камни по берегу — кроме мест, где к пруду подходит дорога
+    const road = t.half + C.wallThick + 0.5;
+    pts.forEach(([px, pz], k) => {
+      if (k % 2 || (Math.abs(pz) < road && Math.abs(px) > AX - 4)) return;
+      const st = new THREE.Mesh(new THREE.DodecahedronGeometry(rnd2(0.9, 1.7), 0), G.stone);
+      st.position.set(px * 1.04, 0.45, pz * 1.04); st.scale.y = 0.55; st.rotation.y = Math.random() * 3; st.castShadow = true; g.add(st);
+    });
+    // камыш по бокам
+    for (const sd of [-1, 1]) for (let k = 0; k < 9; k++) {
+      const rx = rnd2(-AX + 2, AX - 2), rz = sd * (AZ - rnd2(0.5, 2.5)), h = rnd2(4, 7);
+      this.cyl(0.12, 0.15, h, G.leaf, rx, h / 2, rz, g, 4).rotation.z = rnd2(-0.15, 0.15);
+      if (k % 2) this.cyl(0.35, 0.35, 1.4, G.woodDark, rx, h + 0.2, rz, g, 6);
+    }
+    // кувшинки и лягушка
+    for (let k = 0; k < 6; k++) {
+      const lx = rnd2(-AX + 2, AX - 2), lz = (k % 2 ? 1 : -1) * rnd2(road + 1, AZ - 2.5);
+      const pad = this.cyl(1.3, 1.3, 0.08, G.leaf, lx, 0.12, lz, g, 14);
+      if (k === 1) {
+        const fr = new THREE.Group(); fr.position.set(lx, 0.2, lz); g.add(fr);
+        const b = new THREE.Mesh(new THREE.SphereGeometry(0.7, 10, 8), mat('#7cb342')); b.scale.set(1.2, 0.7, 1); b.position.y = 0.4; fr.add(b);
+        for (const e of [-1, 1]) { const eye = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), G.white); eye.position.set(0.5, 0.9, e * 0.35); fr.add(eye); }
+      } else if (k % 3 === 0) { const f = new THREE.Mesh(new THREE.SphereGeometry(0.45, 8, 6), G.pink); f.position.set(lx, 0.45, lz); g.add(f); }
+    }
+    // круги на воде от капель
+    const ringMat = new THREE.MeshBasicMaterial({ color: '#e1f5fe', transparent: true, opacity: 0.4, depthWrite: false });
+    const rings = [0, 1, 2].map(k => { const r = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.7, 20), ringMat.clone()); r.rotation.x = -Math.PI / 2; r.position.set(rnd2(-AX + 3, AX - 3), 0.09, rnd2(-road, road)); r.userData.dynamic = true; g.add(r); return r; });
+    this.anim.push(time => rings.forEach((r, k) => { const f = (time * 0.5 + k / 3) % 1; r.scale.setScalar(0.5 + f * 4); r.material.opacity = 0.45 * (1 - f); }));
+    this.taken.push({ x: cx, z: cz, hw: AX + AZ, hd: AX + AZ, flat: false });
   }
 
   // Каждый кадр из main.js: игрок в стволе — ствол прозрачнеет, выехал — снова плотный

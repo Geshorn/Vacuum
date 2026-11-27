@@ -33,7 +33,8 @@ export class Pickups {
     const geo = new THREE.BoxGeometry(1.6, 1.6, 1.6);
     const ringMat = new THREE.MeshBasicMaterial({ color: '#ffd27a', transparent: true, opacity: 0.5, depthWrite: false });
     for (const f of C.pickups.rows) {
-      const i = track.at(Math.round(track.n * f));
+      let i = track.at(Math.round(track.n * f));
+      if (track.gap?.(i) || track.gap?.(i + 1)) i = track.at(i + track.jump.ditch + 4);   // не над прудом
       for (const lat of C.pickups.lanes) {
         const [x, y, z] = track.edge(i, lat);
         const g = new THREE.Group(); g.position.set(x, y, z); this.group.add(g);

@@ -53,6 +53,8 @@ export class Track {
   }
 
   // Ров сразу за краем трамплина: сегменты 1..ditch после края
+  // Разрыв дороги над прудом: участок от края трамплина до конца рва — тут нет асфальта, бортиков и стен
+  gap(i) { const J = this.jump; if (!J?.ditch) return false; const k = (this.at(i) - J.at + this.n) % this.n; return k <= J.ditch; }
   isDitch(i) { const J = this.jump; if (!J?.ditch) return false; const k = (i - J.at + this.n) % this.n; return k >= 1 && k <= J.ditch; }
 
   // Трамплин: деревянные борта-клинья под въездом и стенка обрыва
@@ -77,31 +79,16 @@ export class Track {
     const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.12, this.half * 2), new THREE.MeshStandardMaterial({ color: '#ffca28' }));
     const p = this.p[lip], t = this.t[lip];
     stripe.position.set(p.x, J.height + 0.08, p.z); stripe.rotation.y = -Math.atan2(t.z, t.x); this.group.add(stripe);
-    if (J.ditch) this.buildDitch();
+    if (J.ditch) this.buildGapEnds();
   }
 
-  // Ров: тёмная вода во всю ширину дороги, по краям — земляные откосы (картинка поверх дороги; робот «тонет» ниже пола)
-  buildDitch() {
-    const J = this.jump, cv = document.createElement('canvas'); cv.width = 64; cv.height = 128;
-    const x = cv.getContext('2d'), gr = x.createLinearGradient(0, 0, 0, 128);
-    gr.addColorStop(0, '#5a3d27'); gr.addColorStop(0.14, '#2b1c12'); gr.addColorStop(0.22, '#16323d'); gr.addColorStop(0.5, '#0b1f29');
-    gr.addColorStop(0.78, '#16323d'); gr.addColorStop(0.86, '#2b1c12'); gr.addColorStop(1, '#5a3d27');
-    x.fillStyle = gr; x.fillRect(0, 0, 64, 128);
-    x.strokeStyle = 'rgba(160,220,255,.25)'; x.lineWidth = 1.5;
-    for (let k = 0; k < 6; k++) { x.beginPath(); const y = 40 + k * 9; x.moveTo(5, y); x.bezierCurveTo(20, y - 3, 44, y + 3, 59, y); x.stroke(); }
-    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
-    const w = this.half + C.wallThick, pos = [], uv = [], idx = [];
-    for (let k = 0; k <= J.ditch; k++) {
-      const [ax, , az] = this.edge(this.at(J.at + k), w), [bx, , bz] = this.edge(this.at(J.at + k), -w);
-      const f = k / J.ditch; pos.push(ax, 0.07, az, bx, 0.07, bz); uv.push(0, f, 1, f);
-      if (k > 0) { const b = (k - 1) * 2; idx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2); }
-    }
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-    g.setIndex(idx); g.computeVertexNormals();
-    const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.25, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 }));
-    m.receiveShadow = true; this.group.add(m);
+  // Края разрыва: на дальнем берегу — срез асфальта (тёмная кромка с землёй под ней)
+  buildGapEnds() {
+    const J = this.jump, w = this.half + C.wallThick, i = this.at(J.at + J.ditch + 1), p = this.p[i], t = this.t[i];
+    const edge = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.5, w * 2), new THREE.MeshStandardMaterial({ color: '#4a3527', roughness: 1 }));
+    edge.position.set(p.x - t.x * 0.4, 0.2, p.z - t.z * 0.4); edge.rotation.y = -Math.atan2(t.z, t.x); edge.castShadow = true; this.group.add(edge);
   }
+
 
   // Высота дороги и наклон (подъём на единицу длины по ходу трассы) в сегменте i
   heightAt(i) { return this.h[this.at(i)]; }
@@ -196,7 +183,7 @@ export class Track {
     const F = f => (typeof f === 'function' ? f : () => f);
     const A = F(fa), B = F(fb), pos = [], idx = [];
     for (let k = 0; k <= cnt; k++) { const i = this.at(i0 + k); pos.push(...this.edge(i, A(i), ya), ...this.edge(i, B(i), yb)); }
-    for (let k = 0; k < cnt; k++) { const b = k * 2; idx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2); }
+    for (let k = 0; k < cnt; k++) { if (this.gap(i0 + k)) continue; const b = k * 2; idx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2); }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     g.setIndex(idx); g.computeVertexNormals();
@@ -262,6 +249,7 @@ export class Track {
     for (let k = 0; k < seg; k++) {
       const i = k % n, j = (k + 1) % n;
       if (colorFn) {                                  // отдельные квадраты, чтобы красить полосками
+        if (this.gap?.(i)) continue;
         const c = colorFn(i), base = pos.length / 3;
         for (const [ii, off, y] of [[i, offA, yA], [i, offB, yB], [j, offA, yA], [j, offB, yB]]) { pos.push(...this.edge(ii, off, y)); col.push(c.r, c.g, c.b); }
         idx.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
@@ -269,7 +257,7 @@ export class Track {
         pos.push(...this.edge(i, offA, yA), ...this.edge(i, offB, yB));
         const v = k * C.sampleStep / C.trackWidth;
         uv.push(0, v, 1, v);
-        if (k < n) { const b = k * 2; idx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2); }
+        if (k < n && !this.gap(i)) { const b = k * 2; idx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2); }
       }
     }
     const g = new THREE.BufferGeometry();
@@ -326,7 +314,7 @@ export class Track {
     const lg = new THREE.BoxGeometry(T * 1.7, 0.35, T * 1.7);
     // все столбики — один «размноженный» объект (InstancedMesh): 2 вызова отрисовки вместо ~120
     const spots = [];
-    for (let i = 0; i < this.n; i += C.pillarEvery) for (const s of [1, -1]) spots.push(this.edge(i, s > 0 ? Math.max(h, this.pitOff(i) + this.ph) + T / 2 : -(h + T / 2)));
+    for (let i = 0; i < this.n; i += C.pillarEvery) if (!this.gap(i) && !this.gap(i - 1)) for (const s of [1, -1]) spots.push(this.edge(i, s > 0 ? Math.max(h, this.pitOff(i) + this.ph) + T / 2 : -(h + T / 2)));
     const pillars = new THREE.InstancedMesh(geo, pm, spots.length), lamps = new THREE.InstancedMesh(lg, lamp, spots.length);
     const m = new THREE.Matrix4();
     spots.forEach(([x, y, z], k) => { pillars.setMatrixAt(k, m.makeTranslation(x, y + H * 0.75, z)); lamps.setMatrixAt(k, m.makeTranslation(x, y + H * 1.35, z)); });
@@ -339,7 +327,7 @@ export class Track {
   wallFace(off, H, mat) {
     const pos = [], idx = [], n = this.n;
     for (let k = 0; k <= n; k++) { const i = k % n; pos.push(...this.edge(i, off, 0), ...this.edge(i, off, H)); }
-    for (let k = 0; k < n; k++) { const b = k * 2; idx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2); }
+    for (let k = 0; k < n; k++) { if (this.gap(k)) continue; const b = k * 2; idx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2); }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     g.setIndex(idx); g.computeVertexNormals();
