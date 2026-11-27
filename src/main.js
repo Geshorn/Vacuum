@@ -69,19 +69,34 @@ const menu = new Menu(startRace);
 menu.show(PLAYER_ROBOT);
 function toMenu() { clearBoom(); hud.hideOut(); hud.hideResults(); mode = 'menu'; menu.show(bot.spec.id); }
 // ── Пауза: P / Pause, или окно ушло в фон. Esc на паузе — в меню ──
+// Продолжение — не сразу, а после отсчёта 3-2-1 (часы всё это время стоят)
+let countdown = null;
 function setPause(on) {
-  if (on === isPaused() || (on && mode !== 'race' && mode !== 'out')) return;
-  if (on) pauseClock(); else { resumeClock(); input.keys = {}; }
-  hud.pause(on);
+  if (on) {
+    if (mode !== 'race' && mode !== 'out') return;
+    stopCountdown();
+    if (!isPaused()) pauseClock();
+    hud.pause(true);
+    return;
+  }
+  if (!isPaused() || countdown) return;
+  hud.pause(false);
+  let n = 3; hud.countdown(n);
+  countdown = setInterval(() => {
+    if (--n > 0) { hud.countdown(n); return; }
+    stopCountdown(); resumeClock(); input.keys = {};
+  }, 1000);
 }
+function stopCountdown() { clearInterval(countdown); countdown = null; hud.countdown(0); }
+function quitPause() { stopCountdown(); resumeClock(); hud.pause(false); toMenu(); }
 addEventListener('blur', () => setPause(true));
 document.addEventListener('visibilitychange', () => { if (document.hidden) setPause(true); });
-hud.onPause(() => setPause(false), () => { setPause(false); toMenu(); });
+hud.onPause(() => setPause(false), quitPause);
 
 addEventListener('keydown', e => {
-  if (e.code === 'KeyP' || e.code === 'Pause') { setPause(!isPaused()); return; }
+  if (e.code === 'KeyP' || e.code === 'Pause') { setPause(!isPaused() || !!countdown); return; }   // P во время отсчёта — снова пауза
   if (isPaused()) {
-    if (e.code === 'Escape') { setPause(false); toMenu(); }
+    if (e.code === 'Escape') quitPause();
     else if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); setPause(false); }
     return;
   }

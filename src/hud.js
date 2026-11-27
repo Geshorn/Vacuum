@@ -121,6 +121,12 @@ export const hud = {
   },
   hideResults() { $('results').classList.remove('on'); },
   pause(on) { $('pause').classList.toggle('on', on); },
+  // Отсчёт перед продолжением: n = 3, 2, 1; 0 — спрятать. Каждая цифра заново «выпрыгивает»
+  countdown(n) {
+    const el = $('count');
+    el.classList.remove('on'); void el.offsetWidth;
+    if (n) { el.textContent = n; el.classList.add('on'); }
+  },
   onPause(resume, menu) { $('p-go').onclick = resume; $('p-menu').onclick = menu; },
 
   // Экран «Выбыл» после взрыва
