@@ -63,7 +63,7 @@ body.in-menu #minimap,body.in-menu #speed,body.in-menu #say,body.in-menu #hint{d
 .m-cell .w{position:absolute;right:6px;top:6px;width:9px;height:9px;border-radius:50%}
 .m-cell .wЛ{background:#6ef0ff}.m-cell .wС{background:#ffcc00}.m-cell .wТ{background:#ff3b4e}
 /* Палитра окраски робота */
-.m-paint{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin:2px 0 8px}
+.m-paint{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:12px 0 16px}
 .m-paint button{width:20px;height:20px;border-radius:50%;border:2px solid rgba(255,255,255,.25);padding:0;cursor:pointer;transition:transform .12s}
 .m-paint button:hover{transform:scale(1.15)}
 .m-paint button.native{border-style:dashed}
