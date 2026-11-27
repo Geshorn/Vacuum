@@ -1,5 +1,5 @@
 import { MAPS } from './maps.js';
-import { settings, saveSettings, DIFFICULTY, RIVALS_RANGE, MODES, LAPS, CLEAN_TIME, WEATHER } from './settings.js';
+import { settings, saveSettings, DIFFICULTY, RIVALS_RANGE, MODES, LAPS, CLEAN_TIME, WEATHER, weatherFor } from './settings.js';
 
 // Первый экран: выбор трассы и настройки гонки (режим, круги/время, сложность, соперники).
 // «Дальше» ведёт к выбору робота. Карта загружается сразу при выборе — фон за меню меняется на неё.
@@ -70,6 +70,9 @@ export class MapMenu {
     if (!MAPS[id]) id = IDS[0];
     settings.map = id; saveSettings();
     const M = MAPS[id];
+    // погода — только та, что бывает на этой карте (дождь — на улице)
+    this.segOf('#m-weather', (M.weathers || ['day']).map(w => [w, WEATHER[w]]), 'weather');
+    this.refreshSettings();
     this.onSelect(id);
     // превью в карточке: снимок загруженной карты сверху, пока снимка нет — схема трассы
     this.shots ||= {};
@@ -95,7 +98,7 @@ export class MapMenu {
     segOf('#m-mode', Object.entries(MODES).map(([k, m]) => [k, m.name]), 'mode');
     segOf('#m-laps', LAPS.map(n => [n, n ? n : '∞']), 'laps');
     segOf('#m-time', CLEAN_TIME.map(s => [s, s / 60 + ' мин']), 'cleanTime');
-    segOf('#m-weather', Object.entries(WEATHER), 'weather');
+    this.segOf = segOf;
     segOf('#m-diff', Object.entries(DIFFICULTY).map(([k, d]) => [k, d.name]), 'difficulty');
     this.el.querySelector('#m-rminus').onclick = () => this.setRivals(settings.rivals - 1);
     this.el.querySelector('#m-rplus').onclick = () => this.setRivals(settings.rivals + 1);
@@ -106,7 +109,7 @@ export class MapMenu {
 
   refreshSettings() {
     for (const [id, key] of [['#m-mode', 'mode'], ['#m-laps', 'laps'], ['#m-time', 'cleanTime'], ['#m-weather', 'weather'], ['#m-diff', 'difficulty']])
-      [...this.el.querySelectorAll(id + ' button')].forEach(b => b.classList.toggle('on', String(settings[key]) === b.dataset.v));
+      [...this.el.querySelectorAll(id + ' button')].forEach(b => b.classList.toggle('on', String(key === 'weather' ? weatherFor(MAPS[settings.map]) : settings[key]) === b.dataset.v));
     this.el.querySelector('#m-laps-row').style.display = settings.mode === 'race' ? '' : 'none';
     this.el.querySelector('#m-time-row').style.display = settings.mode === 'clean' ? '' : 'none';
     this.el.querySelector('#m-mode-hint').textContent = MODES[settings.mode].hint;

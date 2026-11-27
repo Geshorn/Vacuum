@@ -135,6 +135,84 @@ export class Effects {
     this.fans.push({ g, arms, seg, x, z, ph: Math.random() * 6, cheer: 0 });
   }
 
+  // ── Погода и время суток: rain — дождь, blackout — темно и фары, party — прожекторы и конфетти, bubbles — пузыри ──
+  setMode(mode) {
+    this.mode = mode;
+    this.setRain(mode === 'rain');
+    // фары: свет-«конус» на дороге перед каждым роботом и настоящий прожектор у игрока
+    if (mode === 'blackout' && !this.spot) {
+      const sp = this.spot = new THREE.SpotLight('#fff1c9', 260, 60, 0.55, 0.65, 1.4);
+      this.group.add(sp, sp.target);
+      const cv = document.createElement('canvas'); cv.width = 64; cv.height = 128; const x = cv.getContext('2d');
+      const gr = x.createLinearGradient(0, 128, 0, 0); gr.addColorStop(0, 'rgba(255,240,200,.75)'); gr.addColorStop(1, 'rgba(255,240,200,0)');
+      x.fillStyle = gr; x.beginPath(); x.moveTo(26, 128); x.lineTo(38, 128); x.lineTo(64, 0); x.lineTo(0, 0); x.fill();
+      this.beamTex = new THREE.CanvasTexture(cv); this.beams = new Map();
+    }
+    if (mode !== 'blackout' && this.spot) { this.group.remove(this.spot, this.spot.target); this.spot = null; for (const m of this.beams.values()) this.group.remove(m); this.beams.clear(); }
+    // вечеринка: три цветных прожектора кружат над камерой
+    if (mode === 'party' && !this.party) {
+      this.party = ['#ff3bd4', '#3bc8ff', '#ffe03b'].map(c => { const l = new THREE.PointLight(c, 160, 60, 1.6); this.group.add(l); return l; });
+    }
+    if (mode !== 'party' && this.party) { for (const l of this.party) this.group.remove(l); this.party = null; }
+    // пузыри: летают над трассой вокруг камеры
+    if (mode === 'bubbles' && !this.bubbles) {
+      this.bubbles = [];
+      const geo = new THREE.SphereGeometry(1, 16, 12);
+      const shine = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.85, depthWrite: false });
+      for (let k = 0; k < 44; k++) {
+        // плёнка пузыря: светлая, с переливом оттенка; сверху сбоку — яркий блик
+        const h = Math.random(), m = new THREE.MeshStandardMaterial({ color: new THREE.Color().setHSL(h, 0.9, 0.75), emissive: new THREE.Color().setHSL((h + 0.3) % 1, 1, 0.55), emissiveIntensity: 0.45, roughness: 0.05, transparent: true, opacity: 0.42, depthWrite: false });
+        const b = new THREE.Mesh(geo, m); b.scale.setScalar(rnd(1.1, 2.4)); this.group.add(b);
+        const hl = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), shine); hl.position.set(-0.45, 0.5, 0.45); b.add(hl);
+        const rim = new THREE.Mesh(new THREE.TorusGeometry(0.98, 0.04, 6, 24), new THREE.MeshBasicMaterial({ color: new THREE.Color().setHSL((h + 0.5) % 1, 1, 0.7), transparent: true, opacity: 0.6, depthWrite: false }));
+        rim.rotation.x = -1.1; b.add(rim);
+        this.bubbles.push({ m: b, ox: rnd(-60, 60), oz: rnd(-45, 45), y: rnd(1, 14), vy: rnd(0.6, 1.6), ph: Math.random() * 6 });
+      }
+    }
+    if (mode !== 'bubbles' && this.bubbles) { for (const b of this.bubbles) this.group.remove(b.m); this.bubbles = null; }
+  }
+
+  // Каждый кадр — части погоды, которые двигаются
+  updateMode(dt, now, bots, cam) {
+    if (this.spot) {
+      const p = bots[0];
+      if (p?.mesh.visible) {
+        const y = p.mesh.position.y, c = Math.cos(p.a), s = Math.sin(p.a);
+        this.spot.position.set(p.x + c * 0.5, y + 4, p.z + s * 0.5); this.spot.target.position.set(p.x + c * 16, y, p.z + s * 16);
+      }
+      const seen = new Set();
+      for (const b of bots) {
+        if (!b.mesh.visible) continue;
+        let m = this.beams.get(b);
+        if (!m) {
+          m = new THREE.Mesh(new THREE.PlaneGeometry(9, 15), new THREE.MeshBasicMaterial({ map: this.beamTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+          m.geometry.rotateX(-Math.PI / 2); m.geometry.translate(0, 0, -7.5); this.group.add(m); this.beams.set(b, m);
+        }
+        m.position.set(b.x + Math.cos(b.a) * b.s.radius, b.mesh.position.y + 0.12, b.z + Math.sin(b.a) * b.s.radius);
+        m.rotation.y = -b.a - Math.PI / 2; seen.add(b);
+      }
+      for (const [b, m] of this.beams) if (!seen.has(b)) { this.group.remove(m); this.beams.delete(b); }
+    }
+    if (this.party && cam) {
+      this.party.forEach((l, k) => { const a = now * (0.7 + k * 0.25) + k * 2.1; l.position.set(cam.x + Math.cos(a) * 26, 14, cam.z + Math.sin(a) * 20); });
+      this.confT = (this.confT || 0) - dt;
+      if (this.confT <= 0) { this.confT = 0.06; this.emit(this.geo.conf, this.confMats[Math.floor(Math.random() * this.confMats.length)], cam.x + rnd(-45, 45), 26, cam.z + rnd(-35, 35), rnd(-1, 1), -4, rnd(-1, 1), 5, { g: 0, spin: [rnd(-6, 6), rnd(-6, 6)] }); }
+    }
+    if (this.bubbles && cam) {
+      for (const B of this.bubbles) {
+        B.y += B.vy * dt; if (B.y > 12) { B.y = 0.5; B.ox = rnd(-60, 60); B.oz = rnd(-45, 45); B.m.visible = true; }
+        const x = cam.x + B.ox + Math.sin(now * 0.7 + B.ph) * 3, z = cam.z + B.oz + Math.cos(now * 0.5 + B.ph) * 2;
+        B.m.position.set(x, B.y, z);
+        // робот задел пузырь — лопается брызгами
+        if (B.m.visible && B.y < 4) for (const b of bots) if (Math.hypot(b.x - x, b.z - z) < b.s.radius + B.m.scale.x) {
+          B.m.visible = false;
+          for (let k = 0; k < 8; k++) { const a = k / 8 * 6.28; this.emit(this.geo.s, this.mats.spray, x, B.y, z, Math.cos(a) * 5, rnd(1, 4), Math.sin(a) * 5, 0.35, { g: 10 }); }
+          break;
+        }
+      }
+    }
+  }
+
   // ── Дождь: косые капли в коробке вокруг камеры ─────────────────────────────────
   setRain(on) {
     if (!on) { if (this.rain) { this.group.remove(this.rain.mesh); this.rain = null; } return; }
@@ -149,6 +227,7 @@ export class Effects {
 
   // Каждый кадр. bots — все роботы в гонке, leader — кто первый, cam — цель камеры, wet — дождь
   update(dt, now, bots, leader, cam) {
+    this.updateMode(dt, now, bots, cam);
     // частицы
     this.parts = this.parts.filter(p => {
       p.life -= dt;

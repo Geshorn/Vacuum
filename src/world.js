@@ -44,6 +44,12 @@ export class World {
       day: { bg: sky, hemi: ['#fff3e2', '#8a7462', 1.25], sun: ['#fff0dc', 2.2], exp: 1.1, fog: [140, 330] },
       evening: { bg: '#2b2a4a', hemi: ['#8f9bff', '#3a2a3a', 0.55], sun: ['#ffae6b', 0.9], exp: 0.95, fog: [120, 300] },
       rain: { bg: '#9aa6b2', hemi: ['#d0dbe6', '#5a6470', 0.95], sun: ['#e8f0ff', 0.7], exp: 1.0, fog: [90, 250] },
+      // свет отключили: почти темно — видно фары роботов, лампы на столбиках и окна
+      blackout: { bg: '#07080d', hemi: ['#3a4a7a', '#0a0a10', 0.16], sun: ['#7f9cff', 0.12], exp: 1.05, fog: [90, 260] },
+      // вечеринка: приглушённый фиолетовый свет, цветные прожекторы — в fx.js
+      party: { bg: '#1a0f2e', hemi: ['#b48cff', '#2a1036', 0.45], sun: ['#ff7ad9', 0.35], exp: 1.05, fog: [120, 300] },
+      // пузыри: обычный день, чуть мягче
+      bubbles: { bg: sky, hemi: ['#fff6fb', '#8a7f9a', 1.3], sun: ['#fff4fa', 2.0], exp: 1.1, fog: [140, 330] },
     }[mode] || null;
     const a = A || { bg: sky, hemi: ['#fff3e2', '#8a7462', 1.25], sun: ['#fff0dc', 2.2], exp: 1.1, fog: [140, 330] };
     this.setSky(a.bg);

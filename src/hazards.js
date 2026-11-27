@@ -126,8 +126,8 @@ export class Hazards {
       for (const b of bots) {
         const dx = b.x - p.x, dz = b.z - p.z, along = dx * p.fx + dz * p.fz, side = -dx * p.fz + dz * p.fx;
         if (Math.abs(along) < 5 && Math.abs(side) < 3.6 && !((b.padCool || 0) > now)) {
-          // мягкий разовый толчок вперёд (+30% к максимуму), дальше робот сам сбрасывает до своей скорости
-          b.padCool = now + 1.2; if (!b.inLane) b.v = Math.max(b.v, b.s.maxSpeed * 1.3);
+          // как турбо, но короче: секунду держит скорость турбо, дальше робот сам плавно сбрасывает
+          b.padCool = now + 1.2; b.boostUntil = Math.max(b.boostUntil || 0, now + 1);
           onHit?.('boost', b);
         }
       }
@@ -144,13 +144,16 @@ export class Hazards {
       const x = p.x + nrm.x * O.d, z = p.z + nrm.z * O.d, wall = t.halfAt(i);
       let y = t.heightAt(i);
       const ad = Math.abs(O.d);
-      if (ad > wall - 1.2 && ad < wall + C.wallThick + 2.2) { const u = (ad - (wall - 1.2)) / (C.wallThick + 3.4); y += Math.sin(u * Math.PI) * 3.2; }   // перепрыгивает бортик
+      // перепрыгивает бортик: отталкивается за 3.5 ед до стенки и приземляется за ней — высокая дуга (парабола)
+      const j0 = wall - 3.5, j1 = wall + C.wallThick + 3.5;
+      if (ad > j0 && ad < j1) { const u = (ad - j0) / (j1 - j0); y += 4 * u * (1 - u) * 5.5; O.air = true; } else O.air = false;
       if (O.scared > 0) { O.scared -= dt; y += Math.sin((1 - O.scared / 0.5) * Math.PI) * 1.5; }
       O.mesh.position.set(x, y, z);
       const ang = Math.atan2(nrm.z * O.dir, nrm.x * O.dir);
       O.mesh.rotation.y = -ang;
       const U = O.mesh.userData;
-      if (U.roll) U.roll.rotation.z -= O.speed * dt / O.r;
+      if (U.roll && !O.air) U.roll.rotation.z -= O.speed * dt / O.r;   // в прыжке не катится
+      if (U.legs && O.air) { O.mesh.rotation.z = 0; }
       if (U.legs) U.legs.forEach((l, k) => { l.rotation.z = Math.sin(now * 10 + k * Math.PI / 2) * 0.5; });
       if (U.tail) U.tail.rotation.x = Math.sin(now * 3) * 0.4;
       if (U.key) U.key.rotation.x += dt * 8;

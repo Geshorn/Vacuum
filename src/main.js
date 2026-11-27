@@ -21,7 +21,7 @@ import { Rival } from './rivals.js';
 import { collideRobots } from './collide.js';
 import { Pickups, WEAPONS } from './pickups.js';
 import { Combat } from './weapons.js';
-import { settings, painted } from './settings.js';
+import { settings, painted, weatherFor } from './settings.js';
 
 const world = new World(document.getElementById('game'));
 const skids = new Skids(world.scene);
@@ -35,7 +35,7 @@ let bot = null, race = null, st = null, mode = 'menu', rivals = [];
 
 const ghost = { x: 0, z: 0, a: 0, v: 0, lat: 0, i: 0 };   // «призрак», за которым летит камера в меню
 // Погода из настроек: освещение мира и капли дождя
-function applyWeather() { world.setAtmosphere(settings.weather, MAPS[mapId].sky); fx.setRain(settings.weather === 'rain'); }
+function applyWeather() { const w = weatherFor(MAPS[mapId]); world.setAtmosphere(w, MAPS[mapId].sky); fx.setMode(w, bot); }
 
 // Загрузить карту id (см. maps.js): старую убрать со сцены и освободить память видеокарты, новую построить
 function loadMap(id) {
