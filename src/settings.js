@@ -16,11 +16,14 @@ export const MODES = {
   arena: { name: 'Арена', hint: 'Побеждает последний уцелевший' },
   clean: { name: 'Уборка', hint: 'Кто больше соберёт мусора за время' },
 };
+// Палитра окраски робота игрока; null — родной цвет модели
+export const PAINTS = [null, '#f1edf2', '#3a3a44', '#ff3b4e', '#ff8a2e', '#ffd166', '#4cd964', '#2ec4b6', '#5db2ff', '#3d5afe', '#b57bff', '#ff6fb5'];
+
 export const LAPS = [3, 5, 10, 0];          // 0 — без конца
 export const CLEAN_TIME = [60, 120, 180];   // секунды
 
 const KEY = 'vacuum-rush-settings';
-const DEFAULTS = { difficulty: 'medium', rivals: 4, mode: 'race', laps: 3, cleanTime: 120 };
+const DEFAULTS = { difficulty: 'medium', rivals: 4, mode: 'race', laps: 3, cleanTime: 120, colors: {} };
 
 export const settings = { ...DEFAULTS, ...load() };
 
@@ -33,3 +36,13 @@ export function saveSettings() {
 }
 
 export const diff = () => DIFFICULTY[settings.difficulty] || DIFFICULTY.medium;
+
+// Выбранный цвет для робота (свой у каждого) или null — родной
+export const paintOf = id => (settings.colors || {})[id] || null;
+export function setPaint(id, c) {
+  settings.colors = { ...(settings.colors || {}) };
+  if (c) settings.colors[id] = c; else delete settings.colors[id];
+  saveSettings();
+}
+// Паспорт робота с учётом окраски
+export const painted = spec => { const c = paintOf(spec.id); return c ? { ...spec, color: c } : spec; };

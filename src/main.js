@@ -16,7 +16,7 @@ import { Rival } from './rivals.js';
 import { collideRobots } from './collide.js';
 import { Pickups, WEAPONS } from './pickups.js';
 import { Combat } from './weapons.js';
-import { settings } from './settings.js';
+import { settings, painted } from './settings.js';
 
 const world = new World(document.getElementById('game'));
 const track = new Track(world.scene);
@@ -36,7 +36,7 @@ window.__game = { track, skids, trash, world, kitchen, combat };   // для о�
 function startRace(id) {
   if (bot) world.scene.remove(bot.mesh);
   clearBoom(); hud.hideOut();
-  bot = new Robot(world.scene, ROBOTS[id]);
+  bot = new Robot(world.scene, painted(ROBOTS[id]));   // с выбранной в меню окраской
   // Стартовая решётка: по два в ряд за линией старта; игрок — во втором ряду слева
   const slot = k => [-6 - Math.floor(k / 2) * 8, k % 2 ? -3.5 : 3.5];
   const [ps, pl] = slot(2), s0 = track.at(ps), [px, , pz] = track.edge(s0, pl);

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { ROBOTS } from './robots.js';
 import { derive, spinAll } from './robot.js';
 import { buildModel } from './models.js';
-import { settings, saveSettings, DIFFICULTY, RIVALS_RANGE, MODES, LAPS, CLEAN_TIME } from './settings.js';
+import { settings, saveSettings, DIFFICULTY, RIVALS_RANGE, MODES, LAPS, CLEAN_TIME, PAINTS, paintOf, setPaint, painted } from './settings.js';
 
 // Меню выбора робота: сетка портретов, крутящаяся 3D-модель и характеристики полосками.
 const LIST = Object.values(ROBOTS);
@@ -69,11 +69,12 @@ export class Menu {
           <div class="m-row"><span>Сложность</span><div class="m-seg" id="m-diff"></div></div>
           <div class="m-row"><span>Соперники</span><div class="m-step"><button id="m-rminus">−</button><b id="m-rcount"></b><button id="m-rplus">+</button></div></div>
         </div>
-        <div class="m-keys">Стрелки / WASD — выбор · Enter — поехали · R — случайный · 1/2/3 — сложность · −/+ — соперники</div>
+        <div class="m-keys">Стрелки / WASD — выбор · Enter — поехали · R — случайный · C — цвет · 1/2/3 — сложность · −/+ — соперники</div>
       </div>
       <div class="m-card">
         <canvas id="m-view" width="420" height="300"></canvas>
         <div class="m-name"><b id="m-name"></b><span id="m-class"></span></div>
+        <div class="m-paint" id="m-paint"></div>
         <div class="m-stats" id="m-stats"></div>
         <div class="m-btns">
           <button id="m-rand">Случайный</button>
@@ -87,6 +88,8 @@ export class Menu {
     this.el.querySelector('#m-rand').onclick = () => this.random();
     addEventListener('keydown', e => this.onKey(e));
     this.index = 0;
+    this.paint = this.el.querySelector('#m-paint');
+    this.paint.onclick = e => { const b = e.target.closest('button'); if (b) this.setPaint(+b.dataset.i); };
     this.buildSettings();
   }
 
@@ -126,17 +129,11 @@ export class Menu {
     r.setSize(128, 128); r.toneMapping = THREE.ACESFilmicToneMapping;
     const { scene, cam } = studio();
     LIST.forEach((spec, i) => {
-      const m = buildModel(spec);
-      m.group.rotation.y = -0.5;
-      const k = fit(m.group);
-      scene.add(m.group);
-      frame(cam, k, 1, 3.4, midY(m.group));
-      r.render(scene, cam);
-      scene.remove(m.group);
+      const src = this.portrait(r, { scene, cam }, spec);
       const b = document.createElement('button');
       b.className = 'm-cell';
       b.title = spec.name;
-      b.innerHTML = `<img src="${r.domElement.toDataURL()}" alt=""><span>${spec.name}</span><i class="w w${klass(spec.mass)[0]}"></i>`;
+      b.innerHTML = `<img src="${src}" alt=""><span>${spec.name}</span><i class="w w${klass(spec.mass)[0]}"></i>`;
       b.onclick = () => this.select(i);
       b.ondblclick = () => { this.select(i); this.pick(); };
       this.grid.appendChild(b);
@@ -168,13 +165,48 @@ export class Menu {
     this.el.querySelector('#m-class').textContent = klass(spec.mass);
     this.el.querySelector('#m-stats').innerHTML = this.stats[spec.id].map(([label, v, txt]) =>
       `<div class="m-stat"><span>${label}</span><i><b style="width:${Math.max(6, v * 100)}%"></b></i><em>${txt}</em></div>`).join('');
+    this.buildPaint(spec);
     if (this.model) this.vScene.remove(this.model);
-    const m = buildModel(spec);
+    const m = buildModel(painted(spec));
     this.model = m.group; this.spinners = m.spinners;
     // модель вписана в подиум одного размера, сам размер видно по цифрам
     this.model.scale.setScalar(1.9 / fit(this.model));
     this.vScene.add(this.model);
     frame(this.vCam, 2.4, 420 / 300, 3.6, Math.max(0.45, midY(this.model)));
+  }
+
+  // Цвет корпуса: кружки палитры, первый — родной цвет этого робота
+  buildPaint(spec) {
+    const cur = paintOf(spec.id);
+    this.paint.innerHTML = PAINTS.map((c, i) =>
+      `<button data-i="${i}" class="${(c || null) === cur ? 'on' : ''}${c ? '' : ' native'}" title="${c ? c : 'Родной цвет'}" style="background:${c || spec.color}"></button>`).join('');
+  }
+
+  setPaint(i) {
+    const spec = LIST[this.index];
+    setPaint(spec.id, PAINTS[(i + PAINTS.length) % PAINTS.length]);
+    this.select(this.index);
+    this.recolorPortrait(this.index);
+  }
+
+  // Перерисовать портрет в сетке под новый цвет
+  recolorPortrait(i) {
+    const r = this.portraitRenderer ||= (() => {
+      const x = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+      x.setSize(128, 128); x.toneMapping = THREE.ACESFilmicToneMapping; return x;
+    })();
+    const img = this.grid.children[i]?.querySelector('img');
+    if (img) img.src = this.portrait(r, studio(), LIST[i]);
+  }
+
+  portrait(r, { scene, cam }, spec) {
+    const m = buildModel(painted(spec));
+    m.group.rotation.y = -0.5;
+    scene.add(m.group);
+    frame(cam, fit(m.group), 1, 3.4, midY(m.group));
+    r.render(scene, cam);
+    scene.remove(m.group);
+    return r.domElement.toDataURL();
   }
 
   random() {
@@ -189,6 +221,7 @@ export class Menu {
     const c = e.code;
     if (c === 'Enter' || c === 'Space') { e.preventDefault(); this.pick(); }
     else if (c === 'KeyR') this.random();
+    else if (c === 'KeyC') this.setPaint(PAINTS.indexOf(paintOf(LIST[this.index].id)) + (e.shiftKey ? -1 : 1));
     else if (c === 'Digit1' || c === 'Digit2' || c === 'Digit3') this.setDifficulty(Object.keys(DIFFICULTY)[+c.slice(-1) - 1]);
     else if (c === 'Minus' || c === 'NumpadSubtract') this.setRivals(settings.rivals - 1);
     else if (c === 'Equal' || c === 'NumpadAdd') this.setRivals(settings.rivals + 1);

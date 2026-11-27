@@ -62,6 +62,12 @@ body.in-menu #minimap,body.in-menu #speed,body.in-menu #say,body.in-menu #hint{d
 .m-cell.on{border-color:#ff8a5c;box-shadow:0 0 0 2px rgba(255,138,92,.35),0 0 22px rgba(255,90,60,.55);transform:scale(1.05)}
 .m-cell .w{position:absolute;right:6px;top:6px;width:9px;height:9px;border-radius:50%}
 .m-cell .wЛ{background:#6ef0ff}.m-cell .wС{background:#ffcc00}.m-cell .wТ{background:#ff3b4e}
+/* Палитра окраски робота */
+.m-paint{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin:2px 0 8px}
+.m-paint button{width:20px;height:20px;border-radius:50%;border:2px solid rgba(255,255,255,.25);padding:0;cursor:pointer;transition:transform .12s}
+.m-paint button:hover{transform:scale(1.15)}
+.m-paint button.native{border-style:dashed}
+.m-paint button.on{border-color:#fff;box-shadow:0 0 0 2px #ff6a4d}
 /* Настройки гонки под сеткой роботов */
 .m-set{margin-top:clamp(8px,1.4vh,14px);display:flex;flex-direction:column;gap:8px;padding:10px 12px;border-radius:14px;background:rgba(255,255,255,.06)}
 .m-row{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px}
