@@ -146,12 +146,27 @@ export class Effects {
       sp.castShadow = true; sp.shadow.mapSize.set(1024, 1024); sp.shadow.bias = -0.002; sp.shadow.camera.near = 0.5;
       this.group.add(sp, sp.target);
       this.runway();
-      const cv = document.createElement('canvas'); cv.width = 64; cv.height = 128; const x = cv.getContext('2d');
-      const gr = x.createLinearGradient(0, 128, 0, 0); gr.addColorStop(0, 'rgba(255,240,200,.75)'); gr.addColorStop(1, 'rgba(255,240,200,0)');
-      x.fillStyle = gr; x.beginPath(); x.moveTo(26, 128); x.lineTo(38, 128); x.lineTo(64, 0); x.lineTo(0, 0); x.fill();
-      this.beamTex = new THREE.CanvasTexture(cv); this.beams = new Map();
     }
-    if (mode !== 'blackout' && this.spot) { this.group.remove(this.spot, this.spot.target); this.spot = null; for (const m of this.beams.values()) this.group.remove(m); this.beams.clear(); if (this.lightsRow) { this.group.remove(this.lightsRow); this.lightsRow = null; } }
+    if (mode !== 'blackout' && this.spot) { this.group.remove(this.spot, this.spot.target); this.spot = null; if (this.lightsRow) { this.group.remove(this.lightsRow); this.lightsRow = null; } }
+    // лучи фар на дороге: в темноте — чёткий конус, вечером — тусклое рассеянное пятно
+    const beam = mode === 'blackout' ? 'sharp' : mode === 'evening' ? 'soft' : null;
+    if (beam !== this.beamMode) {
+      for (const m of this.beams?.values() || []) this.group.remove(m);
+      this.beams = new Map(); this.beamMode = beam;
+      if (beam) {
+        const cv = document.createElement('canvas'); cv.width = 64; cv.height = 128; const x = cv.getContext('2d');
+        if (beam === 'sharp') {
+          const gr = x.createLinearGradient(0, 128, 0, 0); gr.addColorStop(0, 'rgba(255,240,200,.75)'); gr.addColorStop(1, 'rgba(255,240,200,0)');
+          x.fillStyle = gr; x.beginPath(); x.moveTo(26, 128); x.lineTo(38, 128); x.lineTo(64, 0); x.lineTo(0, 0); x.fill();
+        } else {
+          // рассеянный свет: мягкое вытянутое пятно, ярче у робота и плавно гаснет к краям
+          x.translate(32, 96); x.scale(1, 2.6);
+          const gr = x.createRadialGradient(0, 0, 0, 0, 0, 32); gr.addColorStop(0, 'rgba(255,226,170,.55)'); gr.addColorStop(0.5, 'rgba(255,214,150,.22)'); gr.addColorStop(1, 'rgba(255,210,140,0)');
+          x.fillStyle = gr; x.beginPath(); x.arc(0, 0, 32, 0, 7); x.fill();
+        }
+        this.beamTex = new THREE.CanvasTexture(cv);
+      }
+    }
     // вечеринка: три цветных прожектора кружат над камерой
     if (mode === 'party' && !this.party) {
       this.party = ['#ff3bd4', '#3bc8ff', '#ffe03b'].map(c => { const l = new THREE.PointLight(c, 160, 60, 1.6); this.group.add(l); return l; });
@@ -220,14 +235,17 @@ export class Effects {
         const y = p.mesh.position.y, c = Math.cos(p.a), s = Math.sin(p.a);
         this.spot.position.set(p.x + c * 0.5, y + 4, p.z + s * 0.5); this.spot.target.position.set(p.x + c * 16, y, p.z + s * 16);
       }
-      const seen = new Set();
+    }
+    if (this.beamMode) {
+      const soft = this.beamMode === 'soft', seen = new Set();
       for (const b of bots) {
         if (!b.mesh.visible) continue;
         let m = this.beams.get(b);
         if (!m) {
           // луч на дороге: короткий и узкий, чтобы не вылезал за бортики
-          m = new THREE.Mesh(new THREE.PlaneGeometry(5, 10), new THREE.MeshBasicMaterial({ map: this.beamTex, transparent: true, opacity: 0.7, depthWrite: false, blending: THREE.AdditiveBlending }));
-          m.geometry.rotateX(-Math.PI / 2); m.geometry.translate(0, 0, -5); this.group.add(m); this.beams.set(b, m);
+          const [w, l] = soft ? [7, 11] : [5, 10];
+          m = new THREE.Mesh(new THREE.PlaneGeometry(w, l), new THREE.MeshBasicMaterial({ map: this.beamTex, transparent: true, opacity: soft ? 0.8 : 0.7, depthWrite: false, blending: THREE.AdditiveBlending }));
+          m.geometry.rotateX(-Math.PI / 2); m.geometry.translate(0, 0, -l / 2 + (soft ? 2 : 0)); this.group.add(m); this.beams.set(b, m);
         }
         m.position.set(b.x + Math.cos(b.a) * b.s.radius, b.mesh.position.y + 0.12, b.z + Math.sin(b.a) * b.s.radius);
         m.rotation.y = -b.a - Math.PI / 2; seen.add(b);
@@ -294,7 +312,7 @@ export class Effects {
       } else if (fast && this.rain) {
         b.fxT = 0.05;
         this.emit(this.geo.s, this.mats.spray, bx, y + 0.3, bz, rnd(-2, 2), rnd(2, 4), rnd(-2, 2), 0.4, { g: 15, scale: 1.5 });
-      } else if (fast && this.mode !== 'blackout') {   // в темноте пыль не видно
+      } else if (fast && (!this.mode || this.mode === 'day' || this.mode === 'bubbles')) {   // пыль — только при дневном свете (в сумерках она серая)
         b.fxT = 0.09;
         this.emit(this.geo.puff, this.mats.dust, bx + rnd(-0.5, 0.5), y + 0.3, bz + rnd(-0.5, 0.5), rnd(-0.5, 0.5), 0.6, rnd(-0.5, 0.5), 0.6, { grow: 1.5, fade: true, ownMat: true });
         this.parts.at(-1) && (this.parts.at(-1).op = 0.35);

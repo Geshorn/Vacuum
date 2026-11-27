@@ -13,7 +13,7 @@ export const MAPS = {
   kitchen: {
     name: 'Кухня', desc: 'Рабочий стол, плита и холодильник. Длинные виражи и шпилька в середине.',
     points: TRACK_POINTS, Scenery: Kitchen, sky: '#e6d8c6',
-    weathers: ['day', 'evening', 'blackout', 'party'],   // в помещении дождя нет
+    weathers: ['day', 'evening', 'party'],   // в помещении дождя нет; 'blackout' (без света) пока скрыт
   },
   kids: {
     name: 'Детская', desc: 'Кубики, плюшевые мишки и железная дорога. Извилистая: змейки, шпильки и тугие петли между игрушками.',
@@ -26,7 +26,7 @@ export const MAPS = {
     // мост над железной дорогой: at — точка середины [x, z] на трассе (ближайший к ней сегмент)
     bridge: { at: [148, 120], flat: 22, ramp: 16, height: 7, rails: 13 },   // rails — радиус круга железной дороги под мостом
     Scenery: KidsRoom, sky: '#dfe6f2',
-    weathers: ['day', 'evening', 'blackout', 'bubbles', 'party'],
+    weathers: ['day', 'evening', 'bubbles', 'party'],
   },
   garden: {
     name: 'Сад', desc: 'Газон, клумбы и пруд с рыбками. Длинная прямая, змейка, тоннель сквозь холм и трамплин. Осторожно: дождеватели!',
