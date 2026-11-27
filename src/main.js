@@ -71,7 +71,7 @@ function startRace(id) {
 const menu = new Menu(startRace);
 menu.show(PLAYER_ROBOT);
 function toMenu() { clearBoom(); hud.hideOut(); hud.hideResults(); mode = 'menu'; menu.show(bot.spec.id); }
-// ── Пауза: P / Pause, или окно ушло в фон. Esc на паузе — в меню ──
+// ── Пауза: Esc в гонке или окно ушло в фон. На паузе M — в меню ──
 // Продолжение — не сразу, а после отсчёта 3-2-1 (часы всё это время стоят)
 let countdown = null;
 const COUNT_STEP = 600;   // мс на каждую цифру отсчёта (в css — анимация #count той же длины)
@@ -104,8 +104,8 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) setPa
 hud.onPause(() => setPause(false), quitPause);
 
 addEventListener('keydown', e => {
-  // P / Esc — пауза и обратно (во время отсчёта — снова пауза); Esc вне гонки работает как раньше
-  const toggle = e.code === 'KeyP' || e.code === 'Pause' || (e.code === 'Escape' && (mode === 'race' || isPaused()));
+  // Esc — пауза и обратно (во время отсчёта — снова пауза); вне гонки Esc работает как раньше
+  const toggle = e.code === 'Escape' && (mode === 'race' || isPaused());
   if (toggle) { e.preventDefault(); setPause(!isPaused() || !!countdown); return; }
   if (isPaused()) {
     if (e.code === 'KeyM') quitPause();
