@@ -127,7 +127,7 @@ export const hud = {
     el.classList.remove('on'); void el.offsetWidth;
     if (n) { el.textContent = n; el.classList.add('on'); }
   },
-  onPause(resume, menu) { $('p-go').onclick = resume; $('p-menu').onclick = menu; },
+  onPause(resume, menu, restart) { $('p-go').onclick = resume; $('p-menu').onclick = menu; $('p-again').onclick = restart; },
 
   // Экран «Выбыл» после взрыва
   onOut(again, menu) { $('o-again').onclick = again; $('o-menu').onclick = menu; },

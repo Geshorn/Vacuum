@@ -136,8 +136,14 @@ function runCountdown(go) {
   }, COUNT_STEP);
 }
 function stopCountdown() { clearInterval(countdown); countdown = null; hud.countdown(0); }
-function quitPause() { stopCountdown(); resumeClock(); hud.pause(false); toMenu(); }
-hud.onPause(() => setPause(false), quitPause);
+function leavePause() { stopCountdown(); resumeClock(); hud.pause(false); }
+// «Меню» — на первый экран (трасса и настройки); «Заново» — эта же гонка с начала
+function quitPause() {
+  leavePause(); lastRobot = bot.spec.id;
+  chat.clear(); clearBoom(); hud.hideOut(); hud.hideResults(); mode = 'menu'; mapMenu.show();
+}
+function restartPause() { leavePause(); startRace(bot.spec.id); }
+hud.onPause(() => setPause(false), quitPause, restartPause);
 
 addEventListener('keydown', e => {
   // Esc — пауза и обратно (во время отсчёта — снова пауза); вне гонки Esc работает как раньше
@@ -145,6 +151,7 @@ addEventListener('keydown', e => {
   if (toggle) { e.preventDefault(); setPause(!isPaused() || !!countdown); return; }
   if (isPaused()) {
     if (e.code === 'KeyM') quitPause();
+    else if (e.code === 'KeyR') restartPause();
     else if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); setPause(false); }
     return;
   }

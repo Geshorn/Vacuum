@@ -139,7 +139,7 @@ body.in-menu #results{display:none}
 #pause{position:fixed;inset:28px 0 0;z-index:58;display:flex;align-items:center;justify-content:center;pointer-events:none;opacity:0;transition:opacity .2s;
   background:radial-gradient(ellipse at 50% 45%,rgba(20,3,12,.25),rgba(20,3,12,.75))}
 #pause.on{opacity:1;pointer-events:auto}
-#pause .o-card{text-align:center;min-width:340px}
+#pause .o-card{text-align:center;min-width:420px}
 #pause .m-btns button{white-space:nowrap}
 /* Отсчёт 3-2-1 после паузы */
 #count{position:fixed;left:50%;top:45%;z-index:59;transform:translate(-50%,-50%);font-size:clamp(90px,16vh,160px);font-weight:800;color:#fff;
