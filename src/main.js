@@ -109,7 +109,13 @@ let lastRobot = PLAYER_ROBOT;
 const menu = new Menu(id => { lastRobot = id; startRace(id); }, () => { menu.hide(); mapMenu.show(); });
 const mapMenu = new MapMenu(loadMap, () => { mapMenu.hide(); menu.show(lastRobot); });
 mapMenu.lengthOf = () => track.length;
-mapMenu.snapshot = () => world.snapshot(track);
+// снимок карты для карточки — всегда днём и без погодных эффектов (дождь, фары, прожекторы, пузыри)
+mapMenu.snapshot = () => {
+  world.setAtmosphere('day', MAPS[mapId].sky); fx.group.visible = false;
+  const shot = world.snapshot(track);
+  fx.group.visible = true; applyWeather();
+  return shot;
+};
 mapMenu.onWeather = () => applyWeather();
 loadMap(settings.map);
 mapMenu.show();

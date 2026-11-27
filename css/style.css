@@ -181,3 +181,4 @@ body.in-menu #weapon{display:none}
   font-variant-numeric:tabular-nums}
 #speed b{font-size:40px;font-weight:700;display:block;line-height:1}
 #speed small{font-size:12px;opacity:.8}
+#m-weather button{white-space:nowrap;padding:5px 7px}
