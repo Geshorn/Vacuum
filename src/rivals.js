@@ -49,6 +49,7 @@ export class Rival {
       if (this.ram != null) lane = Math.max(-tr.half + 2, Math.min(tr.half - 2, this.ram));   // таран: на полосу соперника впереди
       const blind = b.blindUntil > t;                 // ослеплён пылевой ракетой: виляет и сбрасывает газ
       if (blind) lane += Math.sin(t * 6) * 4;
+      { const lim = tr.halfAt(b.seg + 8) - b.s.radius - 0.5; lane = Math.max(-lim, Math.min(lim, lane)); }   // в узком месте (тоннель) — ближе к центру
       // на таран чуть прибавляет газу, чтобы догнать
       b.auto(tr, dt, usePit ? i => tr.pitOff(i) : () => lane, this.speedMul * (this.dodging ? C.rivals.dodge.slow : this.ram != null ? 1.12 : 1) * (blind ? 0.75 : 1));
       if (usePit && !b.inLane) {

@@ -227,8 +227,8 @@ export class Trash {
   place(it) {
     const t = this.track, K = C.trash.kinds[it.kind];
     let i, off;
-    if (K.spot === 'risky') { const r = this.pickRisky(); i = r.i; off = r.side * (t.half - rnd(1.2, 1.7)); }
-    else { i = Math.floor(Math.random() * t.n); off = rnd(-1, 1) * (t.half - 1.5); }
+    if (K.spot === 'risky') { const r = this.pickRisky(); i = r.i; off = r.side * ((t.halfAt?.(i) ?? t.half) - rnd(1.2, 1.7)); }
+    else { i = Math.floor(Math.random() * t.n); off = rnd(-1, 1) * ((t.halfAt?.(i) ?? t.half) - 1.5); }
     if (t.gap?.(i) || t.gap?.(i + 1)) i = t.at(i + (t.jump?.ditch || 0) + 3);   // в пруду на месте разрыва мусора нет
     const [x, y, z] = t.edge(i, off);
     it.x = x; it.z = z; it.alive = true; it.anim = null;

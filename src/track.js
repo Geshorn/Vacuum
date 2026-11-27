@@ -50,6 +50,16 @@ export class Track {
     const J = this.jump;
     if (J) for (let k = 0; k <= J.ramp; k++) { const u = k / J.ramp; this.h[this.at(J.at - J.ramp + k)] = J.height * u * u; }
     this.hasHeight = !!(B || J);
+    // ширина дороги по сегментам: в тоннеле можно сузить (tunnel.narrow — половина ширины), плавный переход 10 сегментов
+    this.hw = new Float32Array(this.n).fill(this.half);
+    const T = this.tunnel;
+    if (T?.narrow) {
+      const half = T.len / 2 + 3, ramp = 10;
+      for (let k = -Math.ceil(half + ramp); k <= Math.ceil(half + ramp); k++) {
+        const d = Math.abs(k), u = d <= half ? 1 : Math.max(0, 1 - (d - half) / ramp), e = u * u * (3 - 2 * u);
+        this.hw[this.at(T.at + k)] = this.half + (T.narrow - this.half) * e;
+      }
+    }
   }
 
   // Ров сразу за краем трамплина: сегменты 1..ditch после края
@@ -79,19 +89,13 @@ export class Track {
     const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.12, this.half * 2), new THREE.MeshStandardMaterial({ color: '#ffca28' }));
     const p = this.p[lip], t = this.t[lip];
     stripe.position.set(p.x, J.height + 0.08, p.z); stripe.rotation.y = -Math.atan2(t.z, t.x); this.group.add(stripe);
-    if (J.ditch) this.buildGapEnds();
   }
 
-  // Края разрыва: на дальнем берегу — срез асфальта (тёмная кромка с землёй под ней)
-  buildGapEnds() {
-    const J = this.jump, w = this.half + C.wallThick, i = this.at(J.at + J.ditch + 1), p = this.p[i], t = this.t[i];
-    const edge = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.5, w * 2), new THREE.MeshStandardMaterial({ color: '#4a3527', roughness: 1 }));
-    edge.position.set(p.x - t.x * 0.4, 0.2, p.z - t.z * 0.4); edge.rotation.y = -Math.atan2(t.z, t.x); edge.castShadow = true; this.group.add(edge);
-  }
 
 
   // Высота дороги и наклон (подъём на единицу длины по ходу трассы) в сегменте i
   heightAt(i) { return this.h[this.at(i)]; }
+  halfAt(i) { return this.hw[this.at(i)]; }   // половина ширины дороги в сегменте i
   // Высота и наклон в точке (x, z) рядом с сегментом i — плавно, между соседними сегментами
   // (по номеру сегмента высота меняется ступеньками через каждые sampleStep — робот бы подпрыгивал)
   heightAtPos(i, x, z) { return this.lerpAt(i, x, z, k => this.h[k]); }
@@ -169,7 +173,7 @@ export class Track {
   // Допустимое смещение центра робота радиуса r от центра трассы: [от, до, в пит-лейне ли]
   bounds(i, d, r) {
     const h = this.half, D = this.pitOff(i);
-    if (D <= 0) return [-h + r, h - r, false];
+    if (D <= 0) { const w = this.hw[this.at(i)]; return [-w + r, w - r, false]; }
     const gap = this.sepGap(i);
     if (gap < 0.3) return [-h + r, Math.max(h, D + this.ph) - r, d > h];      // съезд/выезд: дорога и пит-лейн слиты
     if (d > h + gap / 2) return [D - this.ph + r, D + this.ph - r, true];       // за разделительной стенкой
@@ -245,16 +249,17 @@ export class Track {
   // Лента между двумя смещениями от центра (повторяет форму трассы)
   ribbon(offA, offB, yA, yB, material, colorFn) {
     const pos = [], col = [], uv = [], idx = [];
+    const F = f => (typeof f === 'function' ? f : () => f), A = F(offA), B = F(offB);   // смещения — числа или функции сегмента
     const n = this.n, seg = colorFn ? n : n + 1;
     for (let k = 0; k < seg; k++) {
       const i = k % n, j = (k + 1) % n;
       if (colorFn) {                                  // отдельные квадраты, чтобы красить полосками
         if (this.gap?.(i)) continue;
         const c = colorFn(i), base = pos.length / 3;
-        for (const [ii, off, y] of [[i, offA, yA], [i, offB, yB], [j, offA, yA], [j, offB, yB]]) { pos.push(...this.edge(ii, off, y)); col.push(c.r, c.g, c.b); }
+        for (const [ii, off, y] of [[i, A(i), yA], [i, B(i), yB], [j, A(j), yA], [j, B(j), yB]]) { pos.push(...this.edge(ii, off, y)); col.push(c.r, c.g, c.b); }
         idx.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
       } else {
-        pos.push(...this.edge(i, offA, yA), ...this.edge(i, offB, yB));
+        pos.push(...this.edge(i, A(i), yA), ...this.edge(i, B(i), yB));
         const v = k * C.sampleStep / C.trackWidth;
         uv.push(0, v, 1, v);
         if (k < n && !this.gap(i)) { const b = k * 2; idx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2); }
@@ -279,16 +284,16 @@ export class Track {
     x.fillStyle = 'rgba(255,255,255,.35)'; x.fillRect(62, 0, 4, 48);          // пунктир по центру
     const tex = new THREE.CanvasTexture(cv);
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
-    this.ribbon(this.half, -this.half, 0.02, 0.02, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 }));
+    this.ribbon(i => this.hw[i], i => -this.hw[i], 0.02, 0.02, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 }));
   }
 
   buildCurbs() {
     const red = new THREE.Color('#ff3b4e'), white = new THREE.Color('#f4eef2');
     const stripe = i => (Math.floor(this.dist[i] / C.curbStripe) % 2 ? red : white);
     const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6 });
-    const h = this.half, w = C.curbWidth;
-    this.ribbon(h, h - w, 0.06, 0.06, mat, stripe);
-    this.ribbon(-h + w, -h, 0.06, 0.06, mat, stripe);
+    const h = i => this.hw[i], w = C.curbWidth;
+    this.ribbon(h, i => h(i) - w, 0.06, 0.06, mat, stripe);
+    this.ribbon(i => -h(i) + w, i => -h(i), 0.06, 0.06, mat, stripe);
   }
 
   buildWalls() {
@@ -296,12 +301,13 @@ export class Track {
     const top = new THREE.MeshStandardMaterial({ color: '#ff8a5c', roughness: 0.5, emissive: '#5a1408' });
     const H = C.wallHeight, T = C.wallThick, h = this.half;
     // правая сторона — сплошная по всему кругу
-    this.wallFace(-h, H, mat); this.wallFace(-h - T, H, mat);
-    this.ribbon(-h, -h - T, H, H, top);
+    const hw = i => this.hw[i];
+    this.wallFace(i => -hw(i), H, mat); this.wallFace(i => -hw(i) - T, H, mat);
+    this.ribbon(i => -hw(i), i => -hw(i) - T, H, H, top);
     // левая: вне пит-лейна — обычная стена, на пит-лейне — внешняя стена отодвигается, а между дорогой и
     // пит-лейном появляется разделительная стенка
     const s0 = this.pitStart, L = this.pitLen;
-    this.wallRange(s0 + L, this.n - L, h, h + T, mat, top);
+    this.wallRange(s0 + L, this.n - L, hw, i => hw(i) + T, mat, top);
     const outer = i => Math.max(h, this.pitOff(i) + this.ph);
     this.wallRange(s0, L, outer, i => outer(i) + T, mat, top);
     let k0 = 0; while (k0 < L && this.sepGap(this.at(s0 + k0)) < 0.3) k0++;
@@ -314,7 +320,7 @@ export class Track {
     const lg = new THREE.BoxGeometry(T * 1.7, 0.35, T * 1.7);
     // все столбики — один «размноженный» объект (InstancedMesh): 2 вызова отрисовки вместо ~120
     const spots = [];
-    for (let i = 0; i < this.n; i += C.pillarEvery) if (!this.gap(i) && !this.gap(i - 1)) for (const s of [1, -1]) spots.push(this.edge(i, s > 0 ? Math.max(h, this.pitOff(i) + this.ph) + T / 2 : -(h + T / 2)));
+    for (let i = 0; i < this.n; i += C.pillarEvery) if (!this.gap(i) && !this.gap(i - 1)) for (const s of [1, -1]) spots.push(this.edge(i, s > 0 ? Math.max(this.hw[i], this.pitOff(i) + this.ph) + T / 2 : -(this.hw[i] + T / 2)));
     const pillars = new THREE.InstancedMesh(geo, pm, spots.length), lamps = new THREE.InstancedMesh(lg, lamp, spots.length);
     const m = new THREE.Matrix4();
     spots.forEach(([x, y, z], k) => { pillars.setMatrixAt(k, m.makeTranslation(x, y + H * 0.75, z)); lamps.setMatrixAt(k, m.makeTranslation(x, y + H * 1.35, z)); });
@@ -326,7 +332,8 @@ export class Track {
   // Вертикальная стенка вдоль трассы на смещении off (материал двусторонний)
   wallFace(off, H, mat) {
     const pos = [], idx = [], n = this.n;
-    for (let k = 0; k <= n; k++) { const i = k % n; pos.push(...this.edge(i, off, 0), ...this.edge(i, off, H)); }
+    const O = typeof off === 'function' ? off : () => off;
+    for (let k = 0; k <= n; k++) { const i = k % n; pos.push(...this.edge(i, O(i), 0), ...this.edge(i, O(i), H)); }
     for (let k = 0; k < n; k++) { if (this.gap(k)) continue; const b = k * 2; idx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2); }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));

@@ -188,7 +188,9 @@ export class Garden extends Kitchen {
   // Тоннель — поваленный ствол дерева: полый, кора снаружи, светлая древесина внутри, годовые кольца на торцах,
   // мох и грибы сверху. Когда игрок внутри — ствол становится полупрозрачным (см. focus)
   tunnelLog(T) {
-    const t = this.track, half = Math.floor(T.len / 2), Rr = t.half + C.wallThick + 1.8, yc = Rr - 1.4;
+    // ствол чуть «зарыт»: центр ниже радиуса, так что внутренняя стенка выходит из земли прямо у бортиков
+    const t = this.track, half = Math.floor(T.len / 2), w = (T.narrow || t.half) + C.wallThick, Rr = w + 2.4, ri = Rr - 1.1;
+    const yc = Math.sqrt(Math.max(0, ri * ri - (w + 0.3) ** 2));
     const pts = [];
     for (let k = -half - 2; k <= half + 2; k++) { const p = t.p[t.at(T.at + k)]; pts.push(new THREE.Vector3(p.x, yc, p.z)); }
     const curve = new THREE.CatmullRomCurve3(pts);
@@ -201,14 +203,14 @@ export class Garden extends Kitchen {
     const lg = new THREE.Group(); lg.userData.dynamic = true; this.g.add(lg);   // не склеивать — материалы меняют прозрачность
     const outer = new THREE.Mesh(new THREE.TubeGeometry(curve, T.len * 2, Rr, 24, false), M({ map: bark, flatShading: true }));
     outer.castShadow = true; lg.add(outer);
-    lg.add(new THREE.Mesh(new THREE.TubeGeometry(curve, T.len * 2, Rr - 1.1, 24, false), M({ color: '#d7b488', side: THREE.BackSide })));
+    lg.add(new THREE.Mesh(new THREE.TubeGeometry(curve, T.len * 2, ri, 24, false), M({ color: '#d7b488', side: THREE.BackSide })));
     // торцы: кольцо с годовыми кольцами
     const rc = document.createElement('canvas'); rc.width = rc.height = 128; const r = rc.getContext('2d');
     for (let k = 0; k < 10; k++) { r.fillStyle = k % 2 ? '#c9a172' : '#b08550'; r.beginPath(); r.arc(64, 64, 64 - k * 2.4, 0, 7); r.fill(); }
     const ringTex = new THREE.CanvasTexture(rc); ringTex.colorSpace = THREE.SRGBColorSpace;
     for (const u of [0, 1]) {
       const p = curve.getPointAt(u), tg = curve.getTangentAt(u);
-      const ring = new THREE.Mesh(new THREE.RingGeometry(Rr - 1.1, Rr + 0.05, 32), M({ map: ringTex, side: THREE.DoubleSide }));
+      const ring = new THREE.Mesh(new THREE.RingGeometry(ri, Rr + 0.05, 32), M({ map: ringTex, side: THREE.DoubleSide }));
       ring.position.copy(p); ring.lookAt(p.clone().add(tg)); lg.add(ring);
     }
     // мох, грибы и сучок с листьями сверху
@@ -251,10 +253,10 @@ export class Garden extends Kitchen {
     for (let k = 0; k < 10; k++) { x.beginPath(); x.arc(Math.random() * S, Math.random() * S, 6 + Math.random() * 14, 0, Math.PI * 0.8); x.stroke(); }
     const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(0.05, 0.05);
     const water = new THREE.Mesh(new THREE.ShapeGeometry(shape), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.08, metalness: 0.15 }));
-    water.rotation.x = -Math.PI / 2; water.position.y = 0.06; water.receiveShadow = true; g.add(water);
+    water.rotation.x = -Math.PI / 2; water.position.y = 0.008; water.receiveShadow = true; g.add(water);   // ниже асфальта: дальний берег дорога закрывает сама
     // тёмный край у берега
     const rim = new THREE.Mesh(new THREE.ShapeGeometry(shape), new THREE.MeshStandardMaterial({ color: '#3d2b1f', roughness: 1 }));
-    rim.rotation.x = -Math.PI / 2; rim.position.y = 0.03; rim.scale.set(1.06, 1.08, 1); g.add(rim);
+    rim.rotation.x = -Math.PI / 2; rim.position.y = -0.005; rim.scale.set(1.06, 1.08, 1); g.add(rim);
     // камни по берегу — кроме мест, где к пруду подходит дорога
     const road = t.half + C.wallThick + 0.5;
     pts.forEach(([px, pz], k) => {
