@@ -154,24 +154,21 @@ export class Effects {
       for (const m of this.beams?.values() || []) this.group.remove(m);
       this.beams = new Map(); this.beamMode = beam;
       if (beam) {
-        const cv = document.createElement('canvas'); cv.width = 64; cv.height = 128; const x = cv.getContext('2d');
-        if (beam === 'sharp') {
+        const soft = beam === 'soft', cv = document.createElement('canvas');
+        cv.width = soft ? 128 : 64; cv.height = soft ? 256 : 128; const x = cv.getContext('2d');
+        if (!soft) {
           const gr = x.createLinearGradient(0, 128, 0, 0); gr.addColorStop(0, 'rgba(255,240,200,.75)'); gr.addColorStop(1, 'rgba(255,240,200,0)');
           x.fillStyle = gr; x.beginPath(); x.moveTo(26, 128); x.lineTo(38, 128); x.lineTo(64, 0); x.lineTo(0, 0); x.fill();
         } else {
-          // вечерняя фара: от носа робота свет ровно расширяется клином, а на дальнем конце закруглён
-          // (как рожок мороженого). Несколько слоёв всё меньшего размера — мягкие края, ярче к середине
-          const cone = (r, cy) => {
-            const a = Math.acos(Math.min(0.99, r / (126 - cy)));   // касательные из хвостика к кругу на конце
-            x.beginPath(); x.moveTo(32, 126);
-            x.arc(32, cy, r, Math.PI / 2 + a, Math.PI / 2 - a + Math.PI * 2, false);
-            x.closePath(); x.fill();
-          };
-          for (let k = 0; k < 6; k++) {
-            const gr = x.createLinearGradient(0, 126, 0, 0);
-            gr.addColorStop(0, 'rgba(255,232,180,.22)'); gr.addColorStop(0.7, 'rgba(255,224,165,.16)'); gr.addColorStop(1, 'rgba(255,215,150,.05)');
-            x.fillStyle = gr; cone(30 - k * 4.2, 32 + k * 1.5);
-          }
+          // вечерняя фара: выходит из-под робота сразу шириной ~полкорпуса, ровно расширяется и закруглена на конце.
+          // Одна фигура с плавным переходом яркости, размытая целиком — мягкое рассеивание без полос
+          const hw0 = 24, r = 42, cy = 70, y0 = 244;
+          x.filter = 'blur(9px)';
+          const gr = x.createLinearGradient(0, y0, 0, cy - r);
+          gr.addColorStop(0, 'rgba(255,232,180,.62)'); gr.addColorStop(0.55, 'rgba(255,224,168,.32)'); gr.addColorStop(1, 'rgba(255,215,150,.06)');
+          x.fillStyle = gr; x.beginPath();
+          x.moveTo(64 - hw0, y0); x.lineTo(64 - r, cy); x.arc(64, cy, r, Math.PI, 0); x.lineTo(64 + hw0, y0); x.closePath(); x.fill();
+          x.filter = 'none';
         }
         this.beamTex = new THREE.CanvasTexture(cv);
       }
@@ -252,11 +249,12 @@ export class Effects {
         let m = this.beams.get(b);
         if (!m) {
           // луч на дороге: короткий и узкий, чтобы не вылезал за бортики
-          const [w, l] = soft ? [4.6, 8] : [5, 10];   // вечером — «рожок» света перед носом
+          const [w, l] = soft ? [5, 8.5] : [5, 10];   // вечером — мягкий «рожок» света, выходит из-под робота
           m = new THREE.Mesh(new THREE.PlaneGeometry(w, l), new THREE.MeshBasicMaterial({ map: this.beamTex, transparent: true, opacity: soft ? 0.8 : 0.7, depthWrite: false, blending: THREE.AdditiveBlending }));
           m.geometry.rotateX(-Math.PI / 2); m.geometry.translate(0, 0, -l / 2); this.group.add(m); this.beams.set(b, m);
         }
-        m.position.set(b.x + Math.cos(b.a) * b.s.radius, b.mesh.position.y + 0.12, b.z + Math.sin(b.a) * b.s.radius);
+        const off = soft ? b.s.radius * 0.35 : b.s.radius;   // вечером свет начинается почти из-под корпуса
+        m.position.set(b.x + Math.cos(b.a) * off, b.mesh.position.y + 0.12, b.z + Math.sin(b.a) * off);
         m.rotation.y = -b.a - Math.PI / 2; seen.add(b);
       }
       for (const [b, m] of this.beams) if (!seen.has(b)) { this.group.remove(m); this.beams.delete(b); }
