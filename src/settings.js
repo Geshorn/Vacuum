@@ -19,11 +19,14 @@ export const MODES = {
 // Палитра окраски робота игрока; null — родной цвет модели
 export const PAINTS = [null, '#f1edf2', '#3a3a44', '#ff3b4e', '#ff8a2e', '#ffd166', '#4cd964', '#2ec4b6', '#5db2ff', '#3d5afe', '#b57bff', '#ff6fb5'];
 
+// Погода и время суток
+export const WEATHER = { day: 'День', evening: 'Вечер', rain: 'Дождь' };
+
 export const LAPS = [3, 5, 10, 0];          // 0 — без конца
 export const CLEAN_TIME = [60, 120, 180];   // секунды
 
 const KEY = 'vacuum-rush-settings';
-const DEFAULTS = { difficulty: 'medium', rivals: 4, mode: 'race', laps: 3, cleanTime: 120, colors: {}, map: 'kitchen' };
+const DEFAULTS = { difficulty: 'medium', rivals: 4, mode: 'race', laps: 3, cleanTime: 120, colors: {}, map: 'kitchen', weather: 'day' };
 
 export const settings = { ...DEFAULTS, ...load() };
 

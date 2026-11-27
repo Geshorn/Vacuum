@@ -15,6 +15,8 @@ import { Explosion } from './explosion.js';
 import { Smoke } from './smoke.js';
 import { Trash } from './trash.js';
 import { MAPS } from './maps.js';
+import { Hazards } from './hazards.js';
+import { Effects } from './fx.js';
 import { Rival } from './rivals.js';
 import { collideRobots } from './collide.js';
 import { Pickups, WEAPONS } from './pickups.js';
@@ -26,17 +28,20 @@ const skids = new Skids(world.scene);
 const smoke = new Smoke(world.scene);
 const chat = new Chatter();   // реплики соперников
 // Всё, что зависит от карты: трасса, обстановка, мусор, коробки с оружием, снаряды. Пересоздаётся при смене карты
-let track, kitchen, trash, pickups, combat, mapId = null;
+let track, kitchen, trash, pickups, combat, hazards, fx, mapId = null;
 hud.clock(); setInterval(() => hud.clock(), 30000);
 
 let bot = null, race = null, st = null, mode = 'menu', rivals = [];
 
 const ghost = { x: 0, z: 0, a: 0, v: 0, lat: 0, i: 0 };   // «призрак», за которым летит камера в меню
+// Погода из настроек: освещение мира и капли дождя
+function applyWeather() { world.setAtmosphere(settings.weather, MAPS[mapId].sky); fx.setRain(settings.weather === 'rain'); }
+
 // Загрузить карту id (см. maps.js): старую убрать со сцены и освободить память видеокарты, новую построить
 function loadMap(id) {
   if (!MAPS[id]) id = 'kitchen';
   if (id === mapId) return;
-  for (const g of [track?.group, kitchen?.g, trash?.group, pickups?.group, combat?.group]) if (g) {
+  for (const g of [track?.group, kitchen?.g, trash?.group, pickups?.group, combat?.group, hazards?.group, fx?.group]) if (g) {
     world.scene.remove(g);
     g.traverse(o => { o.geometry?.dispose(); });
   }
@@ -50,14 +55,16 @@ function loadMap(id) {
   trash = new Trash(world.scene, track);
   pickups = new Pickups(world.scene, track);
   combat = new Combat(world.scene, track);
+  hazards = new Hazards(world.scene, track, id);
+  fx = new Effects(world.scene, track, id, kitchen);
   combat.onRivalFire = r => chat.say(r, RP.fire, bot);
   combat.onRocket = tg => { if (tg && tg === bot) hud.say(P.rocketWarn, 1800); };
-  world.setSky(M.sky);
+  mapId = id; applyWeather();
   hud.initMap(track);
   skids.clear(); smoke.clear();
   ghost.i = 0;
   mapId = id;
-  window.__game = { track, skids, trash, world, kitchen, combat, mapId };   // для отладки из консоли
+  window.__game = { track, skids, trash, world, kitchen, combat, hazards, fx, mapId };   // для отладки из консоли
 }
 
 // Гонка с выбранным роботом: старт чуть позади линии, носом по ходу трассы
@@ -79,7 +86,7 @@ function startRace(id) {
   const pool = Object.keys(ROBOTS).filter(k => k !== id).sort(() => Math.random() - 0.5);
   rivals = pool.slice(0, settings.rivals).map((rid, k) => {
     const r = new Rival(world.scene, ROBOTS[rid], track), [s, l] = slot(k < 2 ? k : k + 1);
-    r.place(s, l); return r;
+    r.place(s, l); r.onWall = (b, hit) => fx.sparks(b, hit); return r;
   });
   trash.reset(); pickups.reset(); combat.clear(); hud.weapon(null); hud.blind(false);
   st = { pitting: false, wasManual: false, lastWallSay: 0, lastDriftSay: 0, lastChargeSay: 0, warned: false, wasDrift: false };
@@ -102,6 +109,7 @@ const menu = new Menu(id => { lastRobot = id; startRace(id); }, () => { menu.hid
 const mapMenu = new MapMenu(loadMap, () => { mapMenu.hide(); menu.show(lastRobot); });
 mapMenu.lengthOf = () => track.length;
 mapMenu.snapshot = () => world.snapshot(track);
+mapMenu.onWeather = () => applyWeather();
 loadMap(settings.map);
 mapMenu.show();
 function toMenu() { chat.clear(); clearBoom(); hud.hideOut(); hud.hideResults(); mode = 'menu'; menu.show(bot.spec.id); }
@@ -124,9 +132,10 @@ function setPause(on) {
 // Отсчёт 3-2-1 при замершей игре; после него игра идёт. go — надпись после «1» (на старте гонки)
 function runCountdown(go) {
   if (!isPaused()) pauseClock();
-  let n = 3; hud.countdown(n);
+  let n = 3; hud.countdown(n); fx.startLights(n);
   countdown = setInterval(() => {
-    if (--n > 0) { hud.countdown(n); return; }
+    if (--n > 0) { hud.countdown(n); fx.startLights(n); return; }
+    fx.startLights('go');
     stopCountdown(); resumeClock(); input.keys = {};
     if (go) {
       hud.countdown(go);
@@ -222,6 +231,7 @@ function finish(t, title) {
     : `Ты ${mine}-й из ${rows.length}`;
   hud.showResults({ title: mine === 1 ? (race.mode === 'race' ? 'Победа!' : title) : title, sub, rows });
   hud.say(mine === 1 ? P.win : P.finish, 2500);
+  fx.celebrate(bot.x, bot.z);   // конфетти и салют
 }
 
 // ХП кончились: робот взрывается и выбывает из гонки
@@ -290,6 +300,7 @@ function update(t, dt) {
   if (bot.inLane && bot.v > C.pit.speedLimit) bot.v = Math.max(C.pit.speedLimit, bot.v - bot.s.brake * dt);
 
   const hit = bot.integrate(track, a0, dt);
+  if (hit > 4) fx.sparks(bot, hit);
   if (bot.inLane && !st.wasLane) hud.say(P.pitIn, 1600);
   st.wasLane = bot.inLane;
   // Царапины: когда робот трётся о стену, примерно каждые 6 единиц пути вдоль неё появляется новая
@@ -452,7 +463,12 @@ function updateRivals(t, dt) {
     }
   }
   // помехи самой карты (в саду — дождеватели): кого окатило — реплика
+  hazards.update(now, dt, list, (kind, who) => {
+    if (who === bot) { if (kind !== 'boost' || Math.random() < 0.3) hud.say(P[kind === 'boost' ? 'boostPad' : kind === 'roller' ? 'rolled' : 'animal'], 1400); }
+    else if (who.rival && kind !== 'boost') chat.say(who.rival, RP[kind === 'roller' ? 'rolled' : 'animal'], bot);
+  });
   kitchen.affect?.(list, now, who => {
+    who.wetUntil = now + 3;   // мокрые следы — fx.js
     if (who === bot) hud.say(P.wet, 1400);
     else if (who.rival) chat.say(who.rival, RP.wet, bot);
   });
@@ -565,6 +581,13 @@ function damage(who, dmg, by, t, kind) {
   else if (t - st.lastWallSay > 2000) { st.lastWallSay = t; hud.say(kind === 'trash' ? P.shot : kind === 'cap' ? P.cap : P.bump, 1400); }
 }
 
+// Лидер гонки (для зрителей): у кого больше пройдено
+function leader() {
+  let best = mode === 'race' || mode === 'done' ? bot : null, bp = best ? race.crossings * track.n + bot.seg : -1;
+  for (const r of rivals) if (!r.out && r.progress() > bp) { bp = r.progress(); best = r.bot; }
+  return best;
+}
+
 // Реплики соперников по ходу гонки: обгоны игрока, выбывание, мало ХП
 function rivalTalk() {
   const me = race.crossings * track.n + bot.seg;
@@ -611,6 +634,7 @@ function loop() {
     hud.placeSay(bot, world.camera);
     rivalTalk(); chat.update(world.camera);
     kitchen.focus?.(bot, dt);
+    fx.update(dt, t / 1000, [bot, ...rivals.filter(r => !r.out).map(r => r.bot)], leader(), world.camTarget);
   } else if (mode === 'out') {
     // робот взорвался: камера стоит на месте взрыва и трясётся
     boom.update(dt);
@@ -623,6 +647,7 @@ function loop() {
     world.camera.position.x += (Math.random() - 0.5) * k; world.camera.position.y += (Math.random() - 0.5) * k;
     hud.drawMap(bot, rivals);
     hud.placeSay(bot, world.camera); rivalTalk(); chat.update(world.camera);
+    fx.update(dt, t / 1000, rivals.filter(r => !r.out).map(r => r.bot), leader(), world.camTarget);
   } else {
     menuCamera(dt);
     menu.render(t);

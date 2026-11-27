@@ -17,7 +17,7 @@ export class World {
     s.background = new THREE.Color('#e6d8c6');
     s.fog = new THREE.Fog('#e6d8c6', 140, 330);
 
-    s.add(new THREE.HemisphereLight('#fff3e2', '#8a7462', 1.25));
+    this.hemi = new THREE.HemisphereLight('#fff3e2', '#8a7462', 1.25); s.add(this.hemi);
     const sun = this.sun = new THREE.DirectionalLight('#fff0dc', 2.2);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
@@ -36,6 +36,22 @@ export class World {
 
   // Цвет неба/дымки под карту (у каждой комнаты своя гамма)
   setSky(color) { this.scene.background.set(color); this.scene.fog.color.set(color); }
+
+  // Погода и время суток: day — как задумано картой, evening — сумерки (светятся лампы и глаза роботов),
+  // rain — пасмурно и серо (сами капли — в fx.js)
+  setAtmosphere(mode, sky) {
+    const A = {
+      day: { bg: sky, hemi: ['#fff3e2', '#8a7462', 1.25], sun: ['#fff0dc', 2.2], exp: 1.1, fog: [140, 330] },
+      evening: { bg: '#2b2a4a', hemi: ['#8f9bff', '#3a2a3a', 0.55], sun: ['#ffae6b', 0.9], exp: 0.95, fog: [120, 300] },
+      rain: { bg: '#9aa6b2', hemi: ['#d0dbe6', '#5a6470', 0.95], sun: ['#e8f0ff', 0.7], exp: 1.0, fog: [90, 250] },
+    }[mode] || null;
+    const a = A || { bg: sky, hemi: ['#fff3e2', '#8a7462', 1.25], sun: ['#fff0dc', 2.2], exp: 1.1, fog: [140, 330] };
+    this.setSky(a.bg);
+    this.scene.fog.near = a.fog[0]; this.scene.fog.far = a.fog[1];
+    this.hemi.color.set(a.hemi[0]); this.hemi.groundColor.set(a.hemi[1]); this.hemi.intensity = a.hemi[2];
+    this.sun.color.set(a.sun[0]); this.sun.intensity = a.sun[1];
+    this.renderer.toneMappingExposure = a.exp;
+  }
 
   // Снимок карты сверху для превью в меню: камера над серединой трассы, вся трасса в кадре.
   // Рендерим во временную камеру и сразу копируем картинку (до следующего кадра буфер ещё не очищен).

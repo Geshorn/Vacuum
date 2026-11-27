@@ -67,6 +67,7 @@ export class Rival {
 
     const hit = b.integrate(tr, a0, dt);
     this.wallDamage(hit);
+    if (hit > 4) this.onWall?.(b, hit);   // искры — main.js
     if (this.out) return;
 
     // круги: считаем пересечения линии старта вперёд
