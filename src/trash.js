@@ -229,9 +229,9 @@ export class Trash {
     let i, off;
     if (K.spot === 'risky') { const r = this.pickRisky(); i = r.i; off = r.side * (t.half - rnd(1.2, 1.7)); }
     else { i = Math.floor(Math.random() * t.n); off = rnd(-1, 1) * (t.half - 1.5); }
-    const [x, , z] = t.edge(i, off);
+    const [x, y, z] = t.edge(i, off);
     it.x = x; it.z = z; it.alive = true; it.anim = null;
-    it.mesh.position.set(x, 0, z); it.mesh.rotation.y = rnd(0, Math.PI * 2); it.mesh.scale.setScalar(1); it.mesh.visible = true;
+    it.mesh.position.set(x, y, z); it.y0 = y; it.mesh.rotation.y = rnd(0, Math.PI * 2); it.mesh.scale.setScalar(1); it.mesh.visible = true;
   }
 
   reset() { for (const it of this.items) this.place(it); }
@@ -248,7 +248,7 @@ export class Trash {
         const k = Math.min(1, a.t / A), e = k * k, who = a.bot;
         if (who && who.mesh.visible) { a.x = who.x; a.z = who.z; }
         const tx = a.x, tz = a.z;
-        it.mesh.position.set(a.x0 + (tx - a.x0) * e, Math.sin(k * Math.PI) * 0.8, a.z0 + (tz - a.z0) * e);
+        it.mesh.position.set(a.x0 + (tx - a.x0) * e, (it.y0 || 0) + Math.sin(k * Math.PI) * 0.8, a.z0 + (tz - a.z0) * e);
         it.mesh.scale.setScalar(1 - k * 0.9);
         it.mesh.rotation.y += dt * 12;
         if (k >= 1) { it.anim = null; it.mesh.visible = false; }

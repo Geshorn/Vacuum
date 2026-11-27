@@ -33,6 +33,10 @@ export function derive(spec) {
   };
 }
 
+// Высота дороги под роботом (мост): main.js подключает текущую трассу. Без трассы — земля
+let ground = null;
+export function setGround(track) { ground = track; }
+
 export class Robot {
   constructor(scene, spec) {
     this.spec = spec;
@@ -189,8 +193,16 @@ export class Robot {
   }
 
   render(dt, t) {
-    this.mesh.position.set(this.x, 0, this.z);
+    // на мосту — выше и с наклоном по ходу подъёма (нос вверх на въезде, вниз на съезде)
+    let y = 0, pitch = 0;
+    if (ground?.bridge && this.seg != null) {
+      y = ground.heightAt(this.seg);
+      const t = ground.t[ground.at(this.seg)], along = Math.cos(this.a) * t.x + Math.sin(this.a) * t.z;
+      pitch = Math.atan(ground.slopeAt(this.seg)) * along;
+    }
+    this.mesh.position.set(this.x, y, this.z);
     this.mesh.rotation.y = -this.a;
+    this.mesh.rotation.z = pitch;
     // лёгкий крен в заносе
     this.mesh.rotation.x = clamp(-this.lat * 0.012, -0.15, 0.15);
     spinAll(this.spinners, this.v, dt);

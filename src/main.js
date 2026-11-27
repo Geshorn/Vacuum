@@ -6,7 +6,7 @@ import { Chatter, RP } from './chatter.js';
 import { input } from './input.js';
 import { World } from './world.js';
 import { Track } from './track.js';
-import { Robot } from './robot.js';
+import { Robot, setGround } from './robot.js';
 import { hud } from './hud.js';
 import { Skids } from './skids.js';
 import { Menu } from './menu.js';
@@ -44,7 +44,8 @@ function loadMap(id) {
   rivals = [];
   if (bot) { world.scene.remove(bot.mesh); bot = null; }
   const M = MAPS[id];
-  track = new Track(world.scene, M.points);
+  track = new Track(world.scene, M.points, M.bridge);
+  setGround(track);
   kitchen = new M.Scenery(world.scene, track);
   trash = new Trash(world.scene, track);
   pickups = new Pickups(world.scene, track);

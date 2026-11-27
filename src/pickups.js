@@ -35,8 +35,8 @@ export class Pickups {
     for (const f of C.pickups.rows) {
       const i = track.at(Math.round(track.n * f));
       for (const lat of C.pickups.lanes) {
-        const [x, , z] = track.edge(i, lat);
-        const g = new THREE.Group(); g.position.set(x, 0, z); this.group.add(g);
+        const [x, y, z] = track.edge(i, lat);
+        const g = new THREE.Group(); g.position.set(x, y, z); this.group.add(g);
         const box = new THREE.Mesh(geo, mat); box.position.y = 1.6; box.castShadow = true; g.add(box);
         const ring = new THREE.Mesh(new THREE.RingGeometry(1.1, 1.5, 24), ringMat); ring.rotation.x = -Math.PI / 2; ring.position.y = 0.05; g.add(ring);
         this.items.push({ g, box, x, z, alive: true, back: 0, ph: Math.random() * 6 });

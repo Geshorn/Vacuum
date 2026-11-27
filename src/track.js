@@ -3,8 +3,9 @@ import { C } from './config.js';
 
 // Замкнутая трасса: центральная линия разбита на сегменты, у каждого есть точка, направление и нормаль (влево).
 export class Track {
-  // points — опорные точки центральной линии [x, z] (из maps.js), трасса замкнута
-  constructor(scene, points) {
+  // points — опорные точки центральной линии [x, z] (из maps.js), трасса замкнута.
+  // bridge — мост: { at: сегмент середины, flat: длина верха в сегментах, ramp: длина въезда/съезда, height }
+  constructor(scene, points, bridge = null) {
     const curve = new THREE.CatmullRomCurve3(points.map(([x, z]) => new THREE.Vector3(x, 0, z)), true, 'centripetal');
     this.length = curve.getLength();
     const n = Math.round(this.length / C.sampleStep);
@@ -22,8 +23,55 @@ export class Track {
     }
     this.group = new THREE.Group();
     scene.add(this.group);
+    this.setupHeight(bridge);
     this.setupPit();
     this.buildRoad(); this.buildCurbs(); this.buildWalls(); this.buildStart(); this.buildPit();
+    if (bridge) this.buildBridge();
+  }
+
+  // --- Высота дороги (мост) -------------------------------------------------------
+  // Физика плоская (столкновения, стены — как на земле), а дорога, бортики, роботы, мусор и коробки
+  // на этом участке рисуются выше: плавный въезд, ровный верх, плавный съезд.
+  setupHeight(B) {
+    this.h = new Float32Array(this.n); this.bridge = B;
+    if (!B) return;
+    const half = B.flat / 2, total = half + B.ramp;
+    for (let k = -Math.ceil(total); k <= Math.ceil(total); k++) {
+      const d = Math.abs(k), u = d <= half ? 1 : Math.max(0, 1 - (d - half) / B.ramp);
+      this.h[this.at(B.at + k)] = B.height * u * u * (3 - 2 * u);
+    }
+  }
+
+  // Высота дороги и наклон (подъём на единицу длины по ходу трассы) в сегменте i
+  heightAt(i) { return this.h[this.at(i)]; }
+  slopeAt(i) { return (this.h[this.at(i + 1)] - this.h[this.at(i - 1)]) / (2 * C.sampleStep); }
+
+  // Опоры моста: плита под дорогой, борта-«балки» и колонны на въезде и съезде (середина пролёта свободна —
+  // под ней проходит железная дорога)
+  buildBridge() {
+    const B = this.bridge, T = C.wallThick, w = this.half + T;
+    const deck = new THREE.MeshStandardMaterial({ color: '#90caf9', roughness: 0.6, side: THREE.DoubleSide });
+    const span = Math.ceil(B.flat / 2 + B.ramp);
+    const pos = [], idx = [];
+    for (let k = -span; k <= span; k++) {
+      const i = this.at(B.at + k), y = this.h[i];
+      for (const [off, dy] of [[w, 0], [w, -0.9], [-w, -0.9], [-w, 0]]) pos.push(...this.edge(i, off, dy));
+      if (k > -span) { const b = (k + span - 1) * 4; for (let s = 0; s < 3; s++) idx.push(b + s, b + s + 1, b + 4 + s, b + s + 1, b + 5 + s, b + 4 + s); }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
+    const m = new THREE.Mesh(g, deck); m.castShadow = m.receiveShadow = true; this.group.add(m);
+    const col = new THREE.MeshStandardMaterial({ color: '#ffca28', roughness: 0.5 });
+    for (let k = -span + 2; k <= span - 2; k += 5) {
+      if (Math.abs(k) < B.flat / 2 - 1) continue;                     // под серединой — пусто
+      const i = this.at(B.at + k), y = this.h[i];
+      if (y < 1.2) continue;
+      for (const s of [-1, 1]) {
+        const [x, , z] = this.edge(i, s * (w - 0.6), 0);
+        const c = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.8, y - 0.9, 12), col);
+        c.position.set(x, (y - 0.9) / 2, z); c.castShadow = true; this.group.add(c);
+      }
+    }
   }
 
   // --- Пит-лейн ---------------------------------------------------------------
@@ -125,7 +173,8 @@ export class Track {
   }
 
   at(i) { return (i % this.n + this.n) % this.n; }
-  edge(i, off, y = 0) { const p = this.p[i], m = this.nrm[i]; return [p.x + m.x * off, y, p.z + m.z * off]; }
+  // точка на смещении off от центра сегмента i; высота y — над дорогой (на мосту дорога выше земли)
+  edge(i, off, y = 0) { const p = this.p[i], m = this.nrm[i]; return [p.x + m.x * off, y + this.h[i], p.z + m.z * off]; }
 
   // Лента между двумя смещениями от центра (повторяет форму трассы)
   ribbon(offA, offB, yA, yB, material, colorFn) {
@@ -201,7 +250,7 @@ export class Track {
     for (let i = 0; i < this.n; i += C.pillarEvery) for (const s of [1, -1]) spots.push(this.edge(i, s > 0 ? Math.max(h, this.pitOff(i) + this.ph) + T / 2 : -(h + T / 2)));
     const pillars = new THREE.InstancedMesh(geo, pm, spots.length), lamps = new THREE.InstancedMesh(lg, lamp, spots.length);
     const m = new THREE.Matrix4();
-    spots.forEach(([x, , z], k) => { pillars.setMatrixAt(k, m.makeTranslation(x, H * 0.75, z)); lamps.setMatrixAt(k, m.makeTranslation(x, H * 1.35, z)); });
+    spots.forEach(([x, y, z], k) => { pillars.setMatrixAt(k, m.makeTranslation(x, y + H * 0.75, z)); lamps.setMatrixAt(k, m.makeTranslation(x, y + H * 1.35, z)); });
     pillars.castShadow = true; pillars.receiveShadow = true;
     pillars.computeBoundingSphere(); lamps.computeBoundingSphere();
     this.group.add(pillars, lamps);

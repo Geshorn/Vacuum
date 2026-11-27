@@ -185,10 +185,18 @@ export class KidsRoom extends Kitchen {
     const R = this.room, t = this.track;
     // центры свободных «островов» внутри трассы — по средней точке
     const cx = t.p.reduce((s, p) => s + p.x, 0) / t.n, cz = t.p.reduce((s, p) => s + p.z, 0) / t.n;
+    // железная дорога — под мостом: овал поперёк трассы, поезд проезжает под пролётом
+    const B = t.bridge;
+    if (B) {
+      const i = t.at(B.at), p = t.p[i], m = t.nrm[i], a = 14, b = 5;
+      this.trainSize = [a, b];
+      this.put('trainSet', { x: p.x, z: p.z, r: Math.atan2(-m.z, m.x) });
+      this.taken.push({ x: p.x, z: p.z, hw: a + 2, hd: a + 2, flat: true });
+    }
     const list = [
       ['bed', cx, cz, 60, 34, 20, 9],
       ['playRug', cx, cz, 60, 30, 30, 0.2, false],
-      ['trainSet', cx - 20, cz + 10, 60, 30, 20, 4],
+      ...(B ? [] : [['trainSet', cx - 20, cz + 10, 60, 30, 20, 4]]),
       ['kidsTable', cx + 20, cz - 10, 60, 22, 18, 9],
       ['teepee', R.x0 + 30, R.z1 - 40, 40, 16, 16, 20],
       ['rockingHorse', R.x1 - 30, R.z1 - 40, 40, 14, 6, 12],
@@ -260,7 +268,7 @@ export class KidsRoom extends Kitchen {
 
   // Железная дорога: овал рельсов и паровозик с вагонами, который ездит по кругу
   trainSet(x, z) {
-    const g = this.group(x, z), a = 13, b = 7;
+    const g = this.group(x, z), [a, b] = this.trainSize || [13, 7];
     const ring = (r1, r2, m) => { const curve = new THREE.EllipseCurve(0, 0, r1, r2); const pts = curve.getPoints(64).map(p => new THREE.Vector3(p.x, 0.25, p.y)); const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, true), 64, 0.18, 4, true), m); g.add(tube); };
     ring(a - 0.6, b - 0.6, K.steel); ring(a + 0.6, b + 0.6, K.steel);
     for (let k = 0; k < 28; k++) { const t = k / 28 * Math.PI * 2; const s = this.box(0.5, 0.2, 2, K.woodDark, Math.cos(t) * a, 0.1, Math.sin(t) * b, g, false); s.rotation.y = -Math.atan2(Math.cos(t) * b, -Math.sin(t) * a); }

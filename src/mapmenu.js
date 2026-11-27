@@ -69,16 +69,17 @@ export class MapMenu {
   select(id) {
     if (!MAPS[id]) id = IDS[0];
     settings.map = id; saveSettings();
-    [...this.grid.children].forEach(b => {
-      b.classList.toggle('on', b.dataset.id === id);
-      drawTrack(b.querySelector('canvas'), MAPS[b.dataset.id].points, b.dataset.id === id);
-    });
     const M = MAPS[id];
     this.onSelect(id);
-    // превью: снимок загруженной карты сверху (если умеем), иначе — схема трассы
-    const view = this.el.querySelector('#mp-view'), shot = this.snapshot?.();
-    if (shot) view.getContext('2d').drawImage(shot, 0, 0, view.width, view.height);
-    else drawTrack(view, M.points, true);
+    // превью: снимок загруженной карты сверху (запоминаем для карточки), пока снимка нет — схема трассы
+    this.shots ||= {};
+    if (this.snapshot) this.shots[id] = this.snapshot();
+    const paint = (cv, mid) => {
+      const sh = this.shots[mid];
+      if (sh) cv.getContext('2d').drawImage(sh, 0, 0, cv.width, cv.height); else drawTrack(cv, MAPS[mid].points, mid === id);
+    };
+    [...this.grid.children].forEach(b => { b.classList.toggle('on', b.dataset.id === id); paint(b.querySelector('canvas'), b.dataset.id); });
+    paint(this.el.querySelector('#mp-view'), id);
     this.el.querySelector('#mp-name').textContent = M.name;
     this.el.querySelector('#mp-desc').textContent = M.desc;
     // длина круга — у загруженной трассы (в «метрах»: 1 ед ≈ 2.5 см, как в описании скоростей)
@@ -123,7 +124,15 @@ export class MapMenu {
     else if (c === 'Equal' || c === 'NumpadAdd') this.setRivals(settings.rivals + 1);
   }
 
+  // Снимки всех карт для карточек: по очереди загружаем каждую и фотографируем (один раз, при первом показе)
+  prefetch() {
+    if (this.prefetched || !this.snapshot) return;
+    this.prefetched = true; this.shots ||= {};
+    for (const id of IDS) if (id !== settings.map) { this.onSelect(id); this.shots[id] = this.snapshot(); }
+  }
+
   show() {
+    this.prefetch();
     this.open = true;
     document.body.classList.add('in-menu', 'in-maps');
     this.select(settings.map);

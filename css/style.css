@@ -61,7 +61,7 @@ body.in-maps #menu{display:none}
 .mp-grid{display:grid;grid-template-columns:repeat(2,clamp(130px,16vw,200px));gap:12px;padding:4px}
 .mp-cell{position:relative;padding:6px 6px 8px;border:2px solid rgba(255,255,255,.12);border-radius:14px;cursor:pointer;color:#fff;font:inherit;
   background:linear-gradient(160deg,rgba(255,138,92,.18),rgba(82,11,37,.5));transition:transform .15s,border-color .15s,box-shadow .15s}
-.mp-cell canvas{display:block;width:100%;height:auto}
+.mp-cell canvas{display:block;width:100%;height:auto;border-radius:9px}
 .mp-cell span{display:block;margin-top:4px;font-size:14px;font-weight:600}
 .mp-cell:hover{transform:translateY(-2px);border-color:rgba(255,255,255,.4)}
 .mp-cell.on{border-color:#ff8a5c;box-shadow:0 0 0 2px rgba(255,138,92,.35),0 0 22px rgba(255,90,60,.55)}
