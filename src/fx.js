@@ -246,7 +246,7 @@ export class Effects {
         let m = this.beams.get(b);
         if (!m) {
           // луч на дороге: короткий и узкий, чтобы не вылезал за бортики
-          const [w, l] = soft ? [6, 13] : [5, 10];
+          const [w, l] = soft ? [10, 8] : [5, 10];   // вечером — короткий широкий конус
           m = new THREE.Mesh(new THREE.PlaneGeometry(w, l), new THREE.MeshBasicMaterial({ map: this.beamTex, transparent: true, opacity: soft ? 0.8 : 0.7, depthWrite: false, blending: THREE.AdditiveBlending }));
           m.geometry.rotateX(-Math.PI / 2); m.geometry.translate(0, 0, -l / 2); this.group.add(m); this.beams.set(b, m);
         }
