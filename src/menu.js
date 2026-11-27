@@ -150,7 +150,7 @@ export class Menu {
     const s = studio();
     this.vScene = s.scene; this.vCam = s.cam;
     const disc = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.8, 0.2, 48),
-      new THREE.MeshStandardMaterial({ color: '#3a0c22', emissive: '#5a1408', roughness: 0.6 }));
+      new THREE.MeshStandardMaterial({ color: '#0a0809', roughness: 0.9 }));
     disc.position.y = -0.1; this.vScene.add(disc);
     const ring = new THREE.Mesh(new THREE.TorusGeometry(2.7, 0.05, 8, 64), new THREE.MeshBasicMaterial({ color: '#ff8a5c' }));
     ring.rotation.x = Math.PI / 2; this.vScene.add(ring);
