@@ -83,8 +83,11 @@ export class Track {
       if (Math.abs(k) < B.flat / 2 - 1) continue;                     // под серединой — пусто
       const i = this.at(B.at + k), y = this.h[i];
       if (y < 1.2) continue;
+      const c0 = this.p[this.at(B.at)];
       for (const s of [-1, 1]) {
         const [x, , z] = this.edge(i, s * (w - 0.6), 0);
+        // не ставим колонну на рельсы: полоса шириной ±4 вокруг круга железной дороги (поезд с вагонами шире рельсов)
+        if (B.rails && Math.abs(Math.hypot(x - c0.x, z - c0.z) - B.rails) < 4) continue;
         const c = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.8, y - 0.9, 12), col);
         c.position.set(x, (y - 0.9) / 2, z); c.castShadow = true; this.group.add(c);
       }
