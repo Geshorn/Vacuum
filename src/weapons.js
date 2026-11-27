@@ -488,7 +488,7 @@ export class Combat {
     if (w === 'rocket') go = others.some(o => o.dot > 0.2 && o.d < 90) || held > A.maxHold;
     if (w === 'cap') go = others.some(o => o.dot > 0.7 && o.d < 55) || held > A.maxHold;
     if (w === 'sponge') go = b.hp < b.s.hp * 0.8 || others.some(o => o.d < 14) || held > A.maxHold;
-    if (go && held > diff().react && this.fire(b, now)) { rival.gotAt = 0; return; }   // скорость реакции — по сложности
+    if (go && held > diff().react && this.fire(b, now)) { rival.gotAt = 0; this.onRivalFire?.(rival); return; }   // скорость реакции — по сложности
     // оружие, которым никак не воспользоваться (залп без мусора), выбрасываем — чтобы взять новое из коробок
     if (held > A.maxHold + 2) { b.weapon = null; rival.gotAt = 0; }
   }

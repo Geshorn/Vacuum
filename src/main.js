@@ -2,6 +2,7 @@ import { isPaused, pauseClock, resumeClock } from './clock.js';   // первы�
 import { C } from './config.js';
 import { ROBOTS, PLAYER_ROBOT } from './robots.js';
 import { P } from './phrases.js';
+import { Chatter, RP } from './chatter.js';
 import { input } from './input.js';
 import { World } from './world.js';
 import { Track } from './track.js';
@@ -27,6 +28,7 @@ const smoke = new Smoke(world.scene);
 const trash = new Trash(world.scene, track);
 const pickups = new Pickups(world.scene, track);
 const combat = new Combat(world.scene, track);
+const chat = new Chatter();   // реплики соперников
 hud.initMap(track);
 hud.clock(); setInterval(() => hud.clock(), 30000);
 
@@ -48,6 +50,7 @@ function startRace(id) {
     mode: settings.mode, laps: settings.laps, cleanTime: settings.cleanTime, t0: performance.now(), score: 0, finishedAt: 0 };
   hud.hideResults();
   for (const r of rivals) r.dispose();
+  chat.clear();
   const pool = Object.keys(ROBOTS).filter(k => k !== id).sort(() => Math.random() - 0.5);
   rivals = pool.slice(0, settings.rivals).map((rid, k) => {
     const r = new Rival(world.scene, ROBOTS[rid], track), [s, l] = slot(k < 2 ? k : k + 1);
@@ -70,7 +73,7 @@ function startRace(id) {
 
 const menu = new Menu(startRace);
 menu.show(PLAYER_ROBOT);
-function toMenu() { clearBoom(); hud.hideOut(); hud.hideResults(); mode = 'menu'; menu.show(bot.spec.id); }
+function toMenu() { chat.clear(); clearBoom(); hud.hideOut(); hud.hideResults(); mode = 'menu'; menu.show(bot.spec.id); }
 // ── Пауза: Esc в гонке или окно ушло в фон. На паузе M — в меню ──
 // Продолжение — не сразу, а после отсчёта 3-2-1 (часы всё это время стоят)
 let countdown = null;
@@ -94,7 +97,11 @@ function runCountdown(go) {
   countdown = setInterval(() => {
     if (--n > 0) { hud.countdown(n); return; }
     stopCountdown(); resumeClock(); input.keys = {};
-    if (go) hud.countdown(go);
+    if (go) {
+      hud.countdown(go);
+      const r = rivals[Math.floor(Math.random() * rivals.length)];
+      if (r) chat.say(r, RP.start, bot, { force: true });   // кто-то из соперников подаёт голос на старте
+    }
   }, COUNT_STEP);
 }
 function stopCountdown() { clearInterval(countdown); countdown = null; hud.countdown(0); }
@@ -127,6 +134,7 @@ addEventListener('keydown', e => {
   if (e.code === 'Escape' && mode === 'out') toMenu();
   else if (e.code === 'Enter' && mode === 'out' && boom?.t > 1) startRace(bot.spec.id);
 });
+combat.onRivalFire = r => chat.say(r, RP.fire, bot);
 combat.onRocket = tg => { if (tg && tg === bot) hud.say(P.rocketWarn, 1800); };
 hud.onOut(() => startRace(bot.spec.id), toMenu);
 hud.onResults(() => startRace(bot.spec.id), toMenu);
@@ -188,6 +196,8 @@ function clearBoom() { if (boom) { boom.dispose(); boom = null; } clearTimeout(e
 function explode(t) {
   if (mode !== 'race') { bot.hp = Math.max(bot.hp, 1); return; }   // после финиша робота уже не взрываем
   mode = 'out';
+  const near = rivals.filter(r => !r.out).sort((a, b) => Math.hypot(a.bot.x - bot.x, a.bot.z - bot.z) - Math.hypot(b.bot.x - bot.x, b.bot.z - bot.z))[0];
+  if (near) chat.say(near, RP.playerOut, bot, { force: true, ms: 2200 });
   bot.v = bot.lat = 0; bot.mesh.visible = false;
   boom = new Explosion(world.scene, bot.x, bot.z, bot.spec.color, bot.s.radius / 1.3);
   hud.say(P.broken, 1500);
@@ -433,7 +443,7 @@ function catchUp(t) {
     b.x = x; b.z = z; b.seg = seg; b.a = Math.atan2(track.t[seg].z, track.t[seg].x); b.lat = 0;
     b.v = Math.max(b.v, b.s.maxSpeed * 0.6); b.behindSince = 0;
     combat.poof(x, z);
-    if (e.r) { e.r.race.crossings = cross; e.r.race.lastSeg = seg; }
+    if (e.r) { e.r.race.crossings = cross; e.r.race.lastSeg = seg; e.r.wasAhead = undefined; chat.say(e.r, RP.catchUp, bot); }
     else {
       const crossed = cross - race.crossings;
       if (crossed > 0 && race.started) { race.lap += crossed; race.lapStart = t; }   // перескочил старт — круг засчитан, время круга заново
@@ -484,6 +494,7 @@ function damage(who, dmg, by, t, kind) {
     if (dmg <= 0) return;
     const wasOut = who.rival.out;
     who.rival.hurt(dmg);
+    if (by === bot && !who.rival.out) chat.say(who.rival, RP[kind === 'trash' ? 'shot' : kind === 'bump' ? 'bumped' : kind], bot);
     if (!wasOut && who.rival.out && by === bot) {
       race.tokens += C.weapons.killReward; race.earned += C.weapons.killReward; race.kills = (race.kills || 0) + 1;
       hud.say(P.kill, 1800);
@@ -491,6 +502,7 @@ function damage(who, dmg, by, t, kind) {
     return;
   }
   if (mode !== 'race') return;
+  if (kind === 'bump' && by?.rival) chat.say(by.rival, RP.bump, bot);
   if (kind === 'soap') { hud.say(P.slip, 1400); return; }
   if (kind === 'banana') { hud.say(P.banana, 1400); return; }
   if (kind === 'rocket') hud.say(P.rocket, 1600);
@@ -499,6 +511,18 @@ function damage(who, dmg, by, t, kind) {
   who.scratch(); hud.hurt();
   if (who.hp <= 0) explode(t);
   else if (t - st.lastWallSay > 2000) { st.lastWallSay = t; hud.say(kind === 'trash' ? P.shot : kind === 'cap' ? P.cap : P.bump, 1400); }
+}
+
+// Реплики соперников по ходу гонки: обгоны игрока, выбывание, мало ХП
+function rivalTalk() {
+  const me = race.crossings * track.n + bot.seg;
+  for (const r of rivals) {
+    if (r.out) { if (!r.saidOut) { r.saidOut = true; chat.say(r, RP.out, bot, { force: true, ms: 2000 }); } continue; }
+    const ahead = r.progress() > me;
+    if (mode === 'race' && r.wasAhead !== undefined && ahead !== r.wasAhead) chat.say(r, ahead ? RP.overtake : RP.overtaken, bot);
+    r.wasAhead = ahead;
+    if (!r.saidLow && r.bot.hp < r.bot.s.hp * 0.3) { r.saidLow = true; chat.say(r, RP.lowHp, bot); }
+  }
 }
 
 // Роботы толкаются; урон игроку — с репликами и полоской ХП, соперникам — через их hurt()
@@ -533,6 +557,7 @@ function loop() {
     world.follow(bot, dt);
     hud.drawMap(bot, rivals);
     hud.placeSay(bot, world.camera);
+    rivalTalk(); chat.update(world.camera);
   } else if (mode === 'out') {
     // робот взорвался: камера стоит на месте взрыва и трясётся
     boom.update(dt);
@@ -544,7 +569,7 @@ function loop() {
     const k = boom.shake() * 1.2;
     world.camera.position.x += (Math.random() - 0.5) * k; world.camera.position.y += (Math.random() - 0.5) * k;
     hud.drawMap(bot, rivals);
-    hud.placeSay(bot, world.camera);
+    hud.placeSay(bot, world.camera); rivalTalk(); chat.update(world.camera);
   } else {
     menuCamera(dt);
     menu.render(t);
