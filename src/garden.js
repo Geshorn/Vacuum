@@ -423,13 +423,24 @@ export class Garden extends Kitchen {
     const umb = new THREE.Mesh(new THREE.ConeGeometry(8, 2.5, 8, 1, true), mat('#ff7043', { side: THREE.DoubleSide })); umb.position.set(4, 14, -5); umb.castShadow = true; g.add(umb);
   }
 
+  // Круглый гриль-«котёл»: чаша и закрытая крышка-купол с ручкой, три ножки с колёсиками, дымок из отдушины
   bbq(x, z) {
-    const g = this.group(x, z);
-    const bowl = new THREE.Mesh(new THREE.SphereGeometry(3, 16, 10, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), G.black); bowl.position.y = 7; g.add(bowl);
-    const lid = new THREE.Mesh(new THREE.SphereGeometry(3, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), G.black); lid.position.set(0, 7.6, -1.5); lid.rotation.x = -1.2; g.add(lid);
-    for (let k = 0; k < 3; k++) { const a = k * 2.1; const l = this.cyl(0.2, 0.2, 7, G.steel, Math.cos(a) * 1.8, 3.4, Math.sin(a) * 1.8, g, 6); l.rotation.set(Math.sin(a) * 0.25, 0, -Math.cos(a) * 0.25); }
-    for (let k = 0; k < 3; k++) { const s = this.cyl(0.35, 0.35, 3, mat('#a1452b', { roughness: 0.6 }), -1 + k, 7.2, 0, g, 8); s.rotation.z = Math.PI / 2; }
-    this.steam(g, 0, 7.6, 0, 0.7);
+    const g = this.group(x, z), R = 3, Y = 6.5;
+    const bowl = new THREE.Mesh(new THREE.SphereGeometry(R, 20, 10, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), G.black);
+    bowl.position.y = Y; bowl.castShadow = true; g.add(bowl);
+    const lid = new THREE.Mesh(new THREE.SphereGeometry(R * 1.01, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), mat('#c62828', { roughness: 0.35 }));
+    lid.position.y = Y + 0.15; lid.castShadow = true; g.add(lid);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(R * 1.01, 0.12, 6, 24), G.steel); rim.rotation.x = Math.PI / 2; rim.position.y = Y + 0.1; g.add(rim);
+    this.cyl(0.18, 0.18, 0.6, G.steel, 0, Y + R + 0.35, 0, g, 6);
+    const handle = this.cyl(0.25, 0.25, 1.6, G.woodDark, 0, Y + R + 0.7, 0, g, 8); handle.rotation.z = Math.PI / 2;
+    this.cyl(0.35, 0.35, 0.3, G.steel, 1.2, Y + R - 0.4, 0, g, 8).rotation.z = 0.5;     // отдушина
+    for (let k = 0; k < 3; k++) {
+      const a = k * 2.094 + 0.5, lx = Math.cos(a) * R * 0.75, lz = Math.sin(a) * R * 0.75;
+      this.cyl(0.15, 0.15, Y - 0.8, G.steel, lx, (Y - 0.8) / 2 + 0.3, lz, g, 6);
+      if (k < 2) { const w = this.cyl(0.55, 0.55, 0.3, G.black, lx, 0.55, lz, g, 12); w.rotation.z = Math.PI / 2; }
+    }
+    const shelf = new THREE.Mesh(new THREE.RingGeometry(0.5, R * 0.75, 3), G.steel); shelf.rotation.x = -Math.PI / 2; shelf.position.y = 2; g.add(shelf);
+    this.steam(g, 1.3, Y + R - 0.2, 0, 0.7);
   }
 
   birdBath(x, z) {
@@ -479,6 +490,15 @@ export class Garden extends Kitchen {
     const shell = new THREE.Mesh(new THREE.TorusGeometry(1, 0.55, 8, 16), mat('#a1887f')); shell.position.set(-0.3, 1.6, 0); g.add(shell);
     for (const s of [-1, 1]) { const e = this.cyl(0.07, 0.07, 1, G.black, 1.7, 1.3, s * 0.25, g, 4); e.rotation.z = -0.3; }
   }
-  bucket(x, z) { const g = this.group(x, z); this.cyl(1.8, 1.4, 3.2, mat('#ffb300', { roughness: 0.4 }), 0, 1.6, 0, g, 14); const h = new THREE.Mesh(new THREE.TorusGeometry(1.7, 0.1, 4, 16, Math.PI), G.steel); h.position.y = 3.2; h.rotation.y = 0.3; g.add(h); const sp = this.box(0.4, 4, 1.2, G.steel, 1.6, 3, 0.5, g); sp.rotation.z = -0.4; }
+  // Детское ведёрко с песком и лопаткой, прислонённой к боку
+  bucket(x, z) {
+    const g = this.group(x, z), m = mat('#ffb300', { roughness: 0.4 });
+    this.cyl(1.9, 1.4, 3.2, m, 0, 1.6, 0, g, 16);
+    this.cyl(1.75, 1.75, 0.1, mat('#e6c88a', { roughness: 1 }), 0, 2.9, 0, g, 16);              // песок
+    const h = new THREE.Mesh(new THREE.TorusGeometry(1.85, 0.08, 4, 18, Math.PI), G.steel); h.position.y = 3.1; h.rotation.y = 0.4; g.add(h);
+    const sp = new THREE.Group(); sp.position.set(2.1, 0, 0.6); sp.rotation.z = 0.35; g.add(sp);
+    this.cyl(0.13, 0.13, 3.4, mat('#1e88e5', { roughness: 0.4 }), 0, 2.2, 0, sp, 6);
+    this.box(1.1, 1.3, 0.12, mat('#1e88e5', { roughness: 0.4 }), 0, 0.6, 0, sp);
+  }
   bush(x, z) { const g = this.group(x, z); for (let k = 0; k < 4; k++) { const b = new THREE.Mesh(new THREE.IcosahedronGeometry(rnd2(2, 3), 1), G.hedge); b.position.set(rnd2(-2, 2), 2.4, rnd2(-1.5, 1.5)); b.castShadow = true; g.add(b); } for (let k = 0; k < 5; k++) { const f = new THREE.Mesh(new THREE.SphereGeometry(0.4, 6, 4), G.pink); f.position.set(rnd2(-3, 3), rnd2(2.5, 4.5), rnd2(-2.5, 2.5)); g.add(f); } }
 }
