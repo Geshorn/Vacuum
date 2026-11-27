@@ -72,6 +72,7 @@ function toMenu() { clearBoom(); hud.hideOut(); hud.hideResults(); mode = 'menu'
 // ── Пауза: P / Pause, или окно ушло в фон. Esc на паузе — в меню ──
 // Продолжение — не сразу, а после отсчёта 3-2-1 (часы всё это время стоят)
 let countdown = null;
+const COUNT_STEP = 600;   // мс на каждую цифру отсчёта (в css — анимация #count той же длины)
 function setPause(on) {
   if (on) {
     if (mode !== 'race' && mode !== 'out') return;
@@ -92,7 +93,7 @@ function runCountdown(go) {
     if (--n > 0) { hud.countdown(n); return; }
     stopCountdown(); resumeClock(); input.keys = {};
     if (go) hud.countdown(go);
-  }, 1000);
+  }, COUNT_STEP);
 }
 function stopCountdown() { clearInterval(countdown); countdown = null; hud.countdown(0); }
 function quitPause() { stopCountdown(); resumeClock(); hud.pause(false); toMenu(); }
@@ -499,7 +500,11 @@ function bumps(t) {
 let last = 0;
 function loop() {
   const t = performance.now();   // игровое время (стоит на паузе), см. clock.js
-  if (isPaused()) { world.render(); requestAnimationFrame(loop); return; }
+  if (isPaused()) {
+    // игра стоит, но модели ставим на их места — иначе на старте (до первого кадра гонки) роботов не видно
+    if (mode === 'race') { bot.render(0, t); for (const r of rivals) if (!r.out) r.bot.render(0, t); }
+    world.render(); requestAnimationFrame(loop); return;
+  }
   const dt = Math.min((t - last) / 1000 || 0, 0.05); last = t;
   if (mode === 'race' || mode === 'done') {          // done — экран итогов, а гонка вокруг продолжается
     update(t, dt);

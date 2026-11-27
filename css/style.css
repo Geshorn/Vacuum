@@ -124,7 +124,7 @@ body.in-menu #results{display:none}
 #count{position:fixed;left:50%;top:45%;z-index:59;transform:translate(-50%,-50%);font-size:clamp(90px,16vh,160px);font-weight:800;color:#fff;
   text-shadow:0 0 30px rgba(255,90,60,.8),0 4px 0 #ff3b4e;pointer-events:none;opacity:0}
 #count{white-space:nowrap}
-#count.on{animation:count-pop 1s ease-out forwards}
+#count.on{animation:count-pop .6s ease-out forwards}
 @keyframes count-pop{0%{opacity:0;transform:translate(-50%,-50%) scale(1.8)}20%{opacity:1;transform:translate(-50%,-50%) scale(1)}80%{opacity:1}100%{opacity:0;transform:translate(-50%,-50%) scale(.8)}}
 .o-card{text-align:center;padding:22px 18px 16px;transform:scale(.9);transition:transform .5s}
 #out.on .o-card{transform:none}
