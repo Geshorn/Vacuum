@@ -185,10 +185,10 @@ export class KidsRoom extends Kitchen {
     const R = this.room, t = this.track;
     // центры свободных «островов» внутри трассы — по средней точке
     const cx = t.p.reduce((s, p) => s + p.x, 0) / t.n, cz = t.p.reduce((s, p) => s + p.z, 0) / t.n;
-    // железная дорога — под мостом: овал поперёк трассы, поезд проезжает под пролётом
+    // железная дорога — под мостом: круг рельсов, поезд дважды проезжает под пролётом
     const B = t.bridge;
     if (B) {
-      const i = t.at(B.at), p = t.p[i], m = t.nrm[i], a = 14, b = 5;
+      const i = t.at(B.at), p = t.p[i], m = t.nrm[i], a = 13, b = 13;   // круг: поезд дольше на виду
       this.trainSize = [a, b];
       this.put('trainSet', { x: p.x, z: p.z, r: Math.atan2(-m.z, m.x) });
       this.taken.push({ x: p.x, z: p.z, hw: a + 2, hd: a + 2, flat: true });

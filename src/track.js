@@ -33,7 +33,9 @@ export class Track {
   // Физика плоская (столкновения, стены — как на земле), а дорога, бортики, роботы, мусор и коробки
   // на этом участке рисуются выше: плавный въезд, ровный верх, плавный съезд.
   setupHeight(B) {
-    this.h = new Float32Array(this.n); this.bridge = B;
+    this.h = new Float32Array(this.n);
+    if (B && Array.isArray(B.at)) B = { ...B, at: this.nearest(B.at[0], B.at[1]) };   // середина задана точкой [x, z]
+    this.bridge = B;
     if (!B) return;
     const half = B.flat / 2, total = half + B.ramp;
     for (let k = -Math.ceil(total); k <= Math.ceil(total); k++) {
