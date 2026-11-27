@@ -105,7 +105,7 @@ mapMenu.snapshot = () => world.snapshot(track);
 loadMap(settings.map);
 mapMenu.show();
 function toMenu() { chat.clear(); clearBoom(); hud.hideOut(); hud.hideResults(); mode = 'menu'; menu.show(bot.spec.id); }
-// ── Пауза: Esc в гонке или окно ушло в фон. На паузе M — в меню ──
+// ── Пауза: Esc в гонке (сворачивание окна паузу не ставит). На паузе M — в меню ──
 // Продолжение — не сразу, а после отсчёта 3-2-1 (часы всё это время стоят)
 let countdown = null;
 const COUNT_STEP = 600;   // мс на каждую цифру отсчёта (в css — анимация #count той же длины)
@@ -137,8 +137,6 @@ function runCountdown(go) {
 }
 function stopCountdown() { clearInterval(countdown); countdown = null; hud.countdown(0); }
 function quitPause() { stopCountdown(); resumeClock(); hud.pause(false); toMenu(); }
-addEventListener('blur', () => setPause(true));
-document.addEventListener('visibilitychange', () => { if (document.hidden) setPause(true); });
 hud.onPause(() => setPause(false), quitPause);
 
 addEventListener('keydown', e => {
