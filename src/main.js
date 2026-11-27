@@ -57,6 +57,7 @@ function loadMap(id) {
   combat = new Combat(world.scene, track);
   hazards = new Hazards(world.scene, track, id);
   fx = new Effects(world.scene, track, id, kitchen);
+  fx.weaponsGroup = combat.group;   // в темноте снаряды светятся
   combat.onRivalFire = r => chat.say(r, RP.fire, bot);
   combat.onRocket = tg => { if (tg && tg === bot) hud.say(P.rocketWarn, 1800); };
   mapId = id; applyWeather();

@@ -191,8 +191,29 @@ export class Effects {
     inst.computeBoundingSphere(); this.group.add(inst); this.lightsRow = inst; this.runwayMat = m;
   }
 
+  // В темноте всё, что бросают и запускают (ракеты, мусор, пробки, кожуры, пена), светится и окружено ореолом —
+  // иначе не видно, что летит в тебя. group — группа снарядов из weapons.js
+  glowWeapons(group, now) {
+    if (!group) return;
+    if (!this.haloTex) {
+      const cv = document.createElement('canvas'); cv.width = cv.height = 64; const x = cv.getContext('2d');
+      const g = x.createRadialGradient(32, 32, 2, 32, 32, 32); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.35, 'rgba(255,190,120,.6)'); g.addColorStop(1, 'rgba(255,120,60,0)');
+      x.fillStyle = g; x.fillRect(0, 0, 64, 64); this.haloTex = new THREE.CanvasTexture(cv);
+    }
+    for (const c of group.children) {
+      if (!c.userData.halo) {
+        c.traverse(o => { if (o.isMesh && o.material?.emissive && !o.userData.glow) { o.material = o.material.clone(); o.material.emissive.copy(o.material.color); o.material.emissiveIntensity = 0.9; o.userData.glow = true; } });
+        const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.haloTex, color: '#ffb36b', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+        s.scale.setScalar(5); s.position.y = 1; c.add(s); c.userData.halo = s;
+      }
+      // ореол пульсирует — так летящее заметнее
+      c.userData.halo.material.opacity = 0.65 + 0.35 * Math.sin(now * 10 + c.id);
+    }
+  }
+
   // Каждый кадр — части погоды, которые двигаются
   updateMode(dt, now, bots, cam) {
+    if (this.mode === 'blackout') this.glowWeapons(this.weaponsGroup, now);
     if (this.spot) {
       const p = bots[0];
       if (p?.mesh.visible) {
