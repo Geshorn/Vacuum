@@ -62,9 +62,15 @@ export class Combat {
     for (let k = 0; k < 8; k++) { const s = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 6), new THREE.MeshBasicMaterial({ color: '#c9c5d0', transparent: true, opacity: 0, depthWrite: false })); holder.add(s); trail.push(s); }
     const st = { x: bot.x + fx * (bot.s.radius + 1), z: bot.z + fz * (bot.s.radius + 1), a: bot.a, until: now + P.life, k: 0 };
     const cleanup = () => {};
+    this.onRocket?.(tg, bot);   // предупредить игрока, если ракета летит в него
     this.extras.push({ mesh: holder, update: (now, dt, bots, onHit) => {
       if (tg && !tg.mesh.visible) tg = null;          // цель выбыла — летит прямо и взорвётся в конце
       if (tg) {                                      // доворот к цели
+        // цель резко ушла вбок из конуса перед ракетой — захват потерян, дальше летит прямо
+        const ex = tg.x - st.x, ez = tg.z - st.z, ed = Math.hypot(ex, ez) || 1;
+        if ((ex * Math.cos(st.a) + ez * Math.sin(st.a)) / ed < P.lock) tg = null;
+      }
+      if (tg) {
         const want = Math.atan2(tg.z - st.z, tg.x - st.x);
         let da = Math.atan2(Math.sin(want - st.a), Math.cos(want - st.a));
         const turn = P.turn * aim(bot);

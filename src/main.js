@@ -83,6 +83,7 @@ addEventListener('keydown', e => {
   if (e.code === 'Escape' && (mode === 'race' || mode === 'out')) toMenu();
   else if (e.code === 'Enter' && mode === 'out' && boom?.t > 1) startRace(bot.spec.id);
 });
+combat.onRocket = tg => { if (tg && tg === bot) hud.say(P.rocketWarn, 1800); };
 hud.onOut(() => startRace(bot.spec.id), toMenu);
 hud.onResults(() => startRace(bot.spec.id), toMenu);
 
