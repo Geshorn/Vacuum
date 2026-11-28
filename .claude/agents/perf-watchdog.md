@@ -29,7 +29,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/perf.ps1 -Leak 8 -Ti
 
 | Метрика | ⚠️ Предупреждение | ❌ Регрессия |
 |---|---|---|
-| drawCalls.max | +5…15% | > +15% или > +40 вызовов |
+| drawCalls.avg и drawCallsNoShadow | +5…15% | > +15% или > +40 вызовов |
+| shadowFrames (доля кадров с перерисовкой теней) | > 0.35 | > 0.6 (окно теней дёргается каждый кадр — см. world.js follow) |
 | triangles | +15…40% | > +40% |
 | geometries / textures | рост > 10 | рост > 50 (утечка?) |
 | programs | +1…3 | > +3 |
@@ -39,7 +40,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/perf.ps1 -Leak 8 -Ti
 Новая карта без эталона — покажи цифры и предложи записать.
 
 ## 3. Поиск причины, если вызовов стало больше
-Чаще всего новый объект не попал в склейку геометрии.
+Чаще всего новый объект не попал в склейку геометрии. Ещё: новая модель робота или деталь с castShadow (роботы и мусор в карту теней не попадают — у них пятна-тени).
 - `git diff --stat` и `git diff` по src/ — какие меши/объекты добавлены.
 - Grep по `mergeGeometries`/`mergeBufferGeometries`/`InstancedMesh` и по новым `new THREE.Mesh(` вне склейки в файлах карт (kitchen/kids/garden и т.п.).
 - Новые источники света с тенями (каждый — лишний проход по сцене), прозрачные материалы, новые ShaderMaterial (рост programs).

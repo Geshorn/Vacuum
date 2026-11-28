@@ -1,12 +1,68 @@
 {
   "updated": "2026-11-28",
-  "note": "Эталон безголового замера scripts/perf.ps1 (SwiftShader, 5 ботов, камера за лидером). Вызовы считаются за весь кадр, включая тени, поэтому больше ручных 120–155. FPS и cpuMs здесь программные — сравнивать только между такими же прогонами. Обновлять только по просьбе пользователя.",
-  "manual": { "fps": 60, "drawCalls": { "min": 120, "max": 155 }, "heapMB": 46 },
-  "maps": {
-    "kitchen": { "drawCallsMax": 647, "triangles": 88800,  "geometries": 368, "textures": 11, "programs": 19 },
-    "kids":    { "drawCallsMax": 516, "triangles": 119966, "geometries": 367, "textures": 17, "programs": 19 },
-    "garden":  { "drawCallsMax": 469, "triangles": 82926,  "geometries": 429, "textures": 21, "programs": 19 }
+  "note": "Эталон безголового замера scripts/perf.ps1 (SwiftShader, 5 ботов, камера за лидером). Вызовы считаются за весь кадр, включая тени, поэтому больше ручных 120–155. FPS и cpuMs здесь программные — сравнивать только между такими же прогонами. Обновлять только по просьбе пользователя. Обновлён после оптимизации теней и мусора: тени перерисовываются ~в 25% кадров, поэтому сравнивать drawCalls.avg и drawCallsNoShadow; max — кадр с тенями.",
+  "manual": {
+    "fps": 60,
+    "drawCalls": {
+      "min": 120,
+      "max": 155
+    },
+    "heapMB": 46
   },
-  "cpuMsAvgSwiftShader": { "kitchen": 75.7, "kids": 93.1, "garden": 87.0 },
-  "heapMBAfterAllMaps": 146.3
+  "maps": {
+    "kitchen": {
+      "drawCallsAvg": 348,
+      "drawCallsMax": 499,
+      "drawCallsNoShadow": 301,
+      "shadowFrames": 0.27,
+      "triangles": 81748,
+      "geometries": 403,
+      "textures": 12,
+      "programs": 21
+    },
+    "kids": {
+      "drawCallsAvg": 266,
+      "drawCallsMax": 357,
+      "drawCallsNoShadow": 237,
+      "shadowFrames": 0.26,
+      "triangles": 87424,
+      "geometries": 283,
+      "textures": 10,
+      "programs": 20
+    },
+    "garden": {
+      "drawCallsAvg": 275,
+      "drawCallsMax": 337,
+      "drawCallsNoShadow": 256,
+      "shadowFrames": 0.25,
+      "triangles": 77328,
+      "geometries": 253,
+      "textures": 9,
+      "programs": 21
+    }
+  },
+  "cpuMsAvgSwiftShader": {
+    "kitchen": 63.31,
+    "kids": 105.23,
+    "garden": 89.14
+  },
+  "before": {
+    "kitchen": {
+      "drawCallsAvg": 639,
+      "drawCallsMax": 647
+    },
+    "kids": {
+      "drawCallsAvg": 498,
+      "drawCallsMax": 516
+    },
+    "garden": {
+      "drawCallsAvg": 462,
+      "drawCallsMax": 469
+    }
+  },
+  "leakGrowthPerCycle": {
+    "geometries": 3.2,
+    "textures": 0,
+    "heapMB": 0.38
+  }
 }
