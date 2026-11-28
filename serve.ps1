@@ -15,6 +15,26 @@ try {
     $res = $ctx.Response
     try {
       $path = [Uri]::UnescapeDataString($ctx.Request.Url.AbsolutePath.TrimStart('/'))
+      # Итоги симуляции баланса (index.html?sim=N) — в sim/results.json
+      if ($ctx.Request.HttpMethod -eq 'POST' -and $path -eq 'sim-results') {
+        $body = (New-Object IO.StreamReader($ctx.Request.InputStream, [Text.Encoding]::UTF8)).ReadToEnd()
+        $dir = Join-Path $root 'sim'
+        if (-not (Test-Path $dir)) { New-Item -ItemType Directory $dir | Out-Null }
+        $name = $ctx.Request.QueryString['out']; if ($name -notmatch '^[\w-]{1,40}$') { $name = 'results' }
+        [IO.File]::WriteAllText((Join-Path $dir "$name.json"), $body, (New-Object Text.UTF8Encoding($false)))
+        Write-Host "Sim results saved: sim/$name.json"
+        $res.StatusCode = 200; $res.Close(); continue
+      }
+      # Итоги замера производительности (index.html?perf=1) — в perf/results.json
+      if ($ctx.Request.HttpMethod -eq 'POST' -and $path -eq 'perf-results') {
+        $body = (New-Object IO.StreamReader($ctx.Request.InputStream, [Text.Encoding]::UTF8)).ReadToEnd()
+        $dir = Join-Path $root 'perf'
+        if (-not (Test-Path $dir)) { New-Item -ItemType Directory $dir | Out-Null }
+        $name = if ($ctx.Request.Url.Query -like '*leak*') { 'leak.json' } else { 'results.json' }
+        [IO.File]::WriteAllText((Join-Path $dir $name), $body, (New-Object Text.UTF8Encoding($false)))
+        Write-Host "Perf results saved: perf/$name"
+        $res.StatusCode = 200; $res.Close(); continue
+      }
       if ($path -eq '') { $path = 'index.html' }
       $file = [IO.Path]::GetFullPath((Join-Path $root $path))
       if ($file.StartsWith($root) -and (Test-Path $file -PathType Leaf)) {

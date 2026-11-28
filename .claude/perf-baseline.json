@@ -1,0 +1,12 @@
+{
+  "updated": "2026-11-28",
+  "note": "Эталон безголового замера scripts/perf.ps1 (SwiftShader, 5 ботов, камера за лидером). Вызовы считаются за весь кадр, включая тени, поэтому больше ручных 120–155. FPS и cpuMs здесь программные — сравнивать только между такими же прогонами. Обновлять только по просьбе пользователя.",
+  "manual": { "fps": 60, "drawCalls": { "min": 120, "max": 155 }, "heapMB": 46 },
+  "maps": {
+    "kitchen": { "drawCallsMax": 647, "triangles": 88800,  "geometries": 368, "textures": 11, "programs": 19 },
+    "kids":    { "drawCallsMax": 516, "triangles": 119966, "geometries": 367, "textures": 17, "programs": 19 },
+    "garden":  { "drawCallsMax": 469, "triangles": 82926,  "geometries": 429, "textures": 21, "programs": 19 }
+  },
+  "cpuMsAvgSwiftShader": { "kitchen": 75.7, "kids": 93.1, "garden": 87.0 },
+  "heapMBAfterAllMaps": 146.3
+}

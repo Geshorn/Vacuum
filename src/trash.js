@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { C } from './config.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
+// Мусор тени в карту теней не отбрасывает (мелкий, под камерой сверху не виден) — под каждым своё пятно (shade).
 // Мусор на трассе: пыль, крошки, скрепки, монетки (виды и их вес/ценность — в C.trash.kinds).
 // Робот собирает мусор, проезжая по нему (если контейнер не полон): мусор затягивается в робота,
 // а через некоторое время появляется в другом месте трассы.
@@ -9,12 +10,11 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 const rnd = (a, b) => a + Math.random() * (b - a);
 const pick = a => a[Math.floor(Math.random() * a.length)];
 
+// Пятна-тени под мусором и комки пыли рисуются не отдельными объектами (их было ~900), а «размноженными»
+// InstancedMesh — по одному на вид (см. Trash.sync). У каждого предмета в userData лишь размеры и смещения.
 const SHADE_MAT = new THREE.MeshBasicMaterial({ color: '#1a1216', transparent: true, opacity: 0.25, depthWrite: false });
-const SHADE_GEO = new THREE.CircleGeometry(0.5, 16);
-function shade(g, s) {
-  const m = new THREE.Mesh(SHADE_GEO, SHADE_MAT);
-  m.rotation.x = -Math.PI / 2; m.position.y = 0.03; m.scale.setScalar(s); g.add(m);
-}
+const SHADE_GEO = new THREE.CircleGeometry(0.5, 16).rotateX(-Math.PI / 2).translate(0, 0.03, 0);
+function shade(g, s) { g.userData.shade = s; }
 
 // ── Пыль ──────────────────────────────────────────────────────────────────────
 // Текстура пушистого клубка: мягкое пятно с размытыми краями, пух по краю и тонкие волокна
@@ -49,12 +49,11 @@ function makeDust() {
   const g = new THREE.Group();
   shade(g, rnd(0.9, 1.2));
   const n = 3 + Math.floor(Math.random() * 2);
+  // слои пуха — «спрайты» (всегда лицом к камере), рисуются общими InstancedMesh по виду пуха (i % 3)
+  g.userData.dust = [];
   for (let i = 0; i < n; i++) {
-    const mat = new THREE.SpriteMaterial({ map: FLUFF_TEX[i % 3], color: FLUFF_COLORS[i % 3], transparent: true, depthWrite: false, rotation: rnd(0, Math.PI * 2) });
-    const sp = new THREE.Sprite(mat), s = rnd(0.9, 1.4) * (i === 0 ? 1.15 : 0.85);
-    sp.scale.set(s, s, 1);
-    sp.position.set(rnd(-0.25, 0.25), 0.2 + i * 0.06, rnd(-0.25, 0.25));
-    g.add(sp);
+    const s = rnd(0.9, 1.4) * (i === 0 ? 1.15 : 0.85);
+    g.userData.dust.push({ kind: i % 3, s, rot: rnd(0, Math.PI * 2), p: new THREE.Vector3(rnd(-0.25, 0.25), 0.2 + i * 0.06, rnd(-0.25, 0.25)) });
   }
   return g;
 }
@@ -89,7 +88,7 @@ function makeCrumbs() {
     const r = rnd(0.45, 0.6) * (i ? 0.7 : 1), h = rnd(0.12, 0.2);
     const m = new THREE.Mesh(chunkGeo(r, h), K.body);
     m.position.set(i ? rnd(-0.6, 0.6) : 0, 0, i ? rnd(-0.6, 0.6) : 0);
-    m.rotation.set(rnd(-0.15, 0.15), rnd(0, 6.3), rnd(-0.15, 0.15)); m.castShadow = true; g.add(m);
+    m.rotation.set(rnd(-0.15, 0.15), rnd(0, 6.3), rnd(-0.15, 0.15)); g.add(m);
     // кусочки шоколада / мякиша / дырочки сверху
     for (let k = 0; k < K.dotN; k++) {
       const d = new THREE.Mesh(DOT_GEO, K.dots), a = rnd(0, 6.3), rr = r * rnd(0, 0.6), s = r * rnd(0.12, 0.2);
@@ -130,7 +129,7 @@ function makeClip() {
   const g = new THREE.Group();
   shade(g, 0.8);
   const m = new THREE.Mesh(CLIP_GEO, Math.random() < 0.6 ? CLIP_MATS[0] : pick(CLIP_MATS));
-  m.scale.setScalar(1.3); m.position.y = 0.08; m.castShadow = true; g.add(m);
+  m.scale.setScalar(1.3); m.position.y = 0.08; g.add(m);
   g.userData.spin = m;
   return g;
 }
@@ -143,7 +142,7 @@ function makeCoin() {
   const g = new THREE.Group();
   shade(g, 0.7);
   const c = new THREE.Mesh(COIN_GEO, [COIN_EDGE, COIN_MAT, COIN_MAT]);
-  c.rotation.x = Math.PI / 2; c.position.y = 0.6; c.castShadow = true;
+  c.rotation.x = Math.PI / 2; c.position.y = 0.6;
   const ring = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.035, 6, 24), COIN_EDGE);   // ободок-рельеф
   ring.rotation.x = Math.PI / 2; ring.position.y = 0.05; c.add(ring);       // в плоскости лицевой стороны
   const ring2 = ring.clone(); ring2.position.y = -0.05; c.add(ring2);
@@ -167,7 +166,7 @@ function flatten(g) {
     by.get(o.material).push(geo); drop.push(o);
   });
   for (const o of drop) o.parent.remove(o);
-  for (const [m, geos] of by) { const mesh = new THREE.Mesh(mergeGeometries(geos, false), m); mesh.castShadow = true; g.add(mesh); }
+  for (const [m, geos] of by) { const mesh = new THREE.Mesh(mergeGeometries(geos, false), m); mesh.castShadow = false; g.add(mesh); }
   return g;
 }
 
@@ -181,12 +180,15 @@ function makeBattery() {
   const g = new THREE.Group();
   const glow = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.6, 24), BAT_GLOW); glow.rotation.x = -Math.PI / 2; glow.position.y = 0.05; g.add(glow);
   const spin = new THREE.Group(); spin.position.y = 0.9; g.add(spin);
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 2.2, 16), BAT_BODY); body.rotation.z = Math.PI / 2; body.castShadow = true; spin.add(body);
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 2.2, 16), BAT_BODY); body.rotation.z = Math.PI / 2; spin.add(body);
   const band = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.52, 0.9, 16), BAT_BAND); band.rotation.z = Math.PI / 2; band.position.x = 0.55; spin.add(band);
   const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.25, 10), BAT_TIP); tip.rotation.z = Math.PI / 2; tip.position.x = 1.22; spin.add(tip);
   g.userData.spin = spin; g.userData.bob = spin; g.userData.bobBase = 0.9;
   return g;
 }
+
+const DUST_GEO = new THREE.PlaneGeometry(1, 1);
+const M = new THREE.Matrix4(), V = new THREE.Vector3(), S = new THREE.Vector3(), Q = new THREE.Quaternion(), QZ = new THREE.Quaternion(), Q0 = new THREE.Quaternion(), Z = new THREE.Vector3(0, 0, 1);
 
 const MAKERS = { battery: makeBattery, dust: makeDust, crumb: () => flatten(makeCrumbs()), clip: makeClip, coin: makeCoin };
 
@@ -194,12 +196,40 @@ export class Trash {
   constructor(scene, track) {
     this.track = track; this.items = [];
     this.group = new THREE.Group(); scene.add(this.group);
+    this.camera = null;   // для пыли «лицом к камере»; ставит main.js
     this.findRiskySpots();
     for (const [kind, K] of Object.entries(C.trash.kinds)) for (let i = 0; i < K.count; i++) {
       const mesh = MAKERS[kind](); this.group.add(mesh);
       const it = { kind, mesh, alive: true, back: 0, phase: Math.random() * 6 };
       this.place(it); this.items.push(it);
     }
+    // общие InstancedMesh: пятна-тени и три вида пуха
+    const nShade = this.items.filter(it => it.mesh.userData.shade).length;
+    const nDust = this.items.reduce((a, it) => a + (it.mesh.userData.dust?.length || 0), 0);
+    const inst = (geo, mat, n, order) => { const m = new THREE.InstancedMesh(geo, mat, Math.max(1, n)); m.frustumCulled = false; m.renderOrder = order; m.count = 0; this.group.add(m); return m; };
+    this.shades = inst(SHADE_GEO, SHADE_MAT, nShade, 0);
+    this.dust = FLUFF_TEX.map((map, k) => inst(DUST_GEO, new THREE.MeshBasicMaterial({ map, color: FLUFF_COLORS[k], transparent: true, depthWrite: false }), nDust, 1 + k));
+    this.sync();
+  }
+
+  // Переписать матрицы InstancedMesh по текущим позициям предметов (видимых)
+  sync() {
+    const q = this.camera ? this.camera.quaternion : Q0;
+    let ns = 0; const nd = [0, 0, 0];
+    for (const it of this.items) {
+      const g = it.mesh, u = g.userData;
+      if (!g.visible) continue;
+      g.updateMatrix();
+      if (u.shade) { M.makeScale(u.shade, 1, u.shade).premultiply(g.matrix); this.shades.setMatrixAt(ns++, M); }
+      if (u.dust) for (const d of u.dust) {
+        V.copy(d.p).applyMatrix4(g.matrix);
+        const sc = d.s * g.scale.x;
+        M.compose(V, Q.copy(q).multiply(QZ.setFromAxisAngle(Z, d.rot)), S.set(sc, sc, sc));
+        this.dust[d.kind].setMatrixAt(nd[d.kind]++, M);
+      }
+    }
+    this.shades.count = ns; this.shades.instanceMatrix.needsUpdate = true;
+    this.dust.forEach((m, k) => { m.count = nd[k]; m.instanceMatrix.needsUpdate = true; });
   }
 
   // Опасные места: у стены на внешней стороне поворотов (чем круче поворот, тем чаще туда кладём)
@@ -235,7 +265,7 @@ export class Trash {
     it.mesh.position.set(x, y, z); it.y0 = y; it.mesh.rotation.y = rnd(0, Math.PI * 2); it.mesh.scale.setScalar(1); it.mesh.visible = true;
   }
 
-  reset() { for (const it of this.items) this.place(it); }
+  reset() { for (const it of this.items) this.place(it); this.sync?.(); }
 
   // bots — роботы, которые собирают мусор (у кого контейнер полон или кто выбыл — не собирают).
   // Возвращает собранное за кадр: [{ bot, kind }].
@@ -271,6 +301,7 @@ export class Trash {
         }
       }
     }
+    this.sync();
     return got;
   }
 }

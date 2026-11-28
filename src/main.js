@@ -1,4 +1,4 @@
-import { isPaused, pauseClock, resumeClock } from './clock.js';   // первым: подменяет performance.now
+import { isPaused, pauseClock, resumeClock, setSimTime } from './clock.js';   // первым: подменяет performance.now
 import { C } from './config.js';
 import { ROBOTS, PLAYER_ROBOT } from './robots.js';
 import { P } from './phrases.js';
@@ -22,6 +22,10 @@ import { collideRobots } from './collide.js';
 import { Pickups, WEAPONS } from './pickups.js';
 import { Combat } from './weapons.js';
 import { settings, painted, weatherFor } from './settings.js';
+import { runSim } from './sim.js';
+import { runPerf } from './perf.js';
+import { runLeak } from './leak.js';
+import { disposeDeep } from './util.js';
 
 const world = new World(document.getElementById('game'));
 const skids = new Skids(world.scene);
@@ -35,24 +39,23 @@ let bot = null, race = null, st = null, mode = 'menu', rivals = [];
 
 const ghost = { x: 0, z: 0, a: 0, v: 0, lat: 0, i: 0 };   // «призрак», за которым летит камера в меню
 // Погода из настроек: освещение мира и капли дождя
-function applyWeather() { const w = weatherFor(MAPS[mapId]); world.setAtmosphere(w, MAPS[mapId].sky); fx.setMode(w, bot); }
+function applyWeather() { const w = weatherFor(MAPS[mapId]); world.setAtmosphere(w, MAPS[mapId].sky); fx.setMode(w, bot); world.shadowEveryFrame = !!fx.spot; world.sun.castShadow = !fx.spot; }   // в темноте тени даёт фара, лунная тень — лишний проход
 
 // Загрузить карту id (см. maps.js): старую убрать со сцены и освободить память видеокарты, новую построить
 function loadMap(id) {
   if (!MAPS[id]) id = 'kitchen';
   if (id === mapId) return;
   for (const g of [track?.group, kitchen?.g, trash?.group, pickups?.group, combat?.group, hazards?.group, fx?.group]) if (g) {
-    world.scene.remove(g);
-    g.traverse(o => { o.geometry?.dispose(); });
+    disposeDeep(g);   // геометрии, материалы и текстуры (раньше освобождались только геометрии — текстуры копились)
   }
   for (const r of rivals) r.dispose();
   rivals = [];
-  if (bot) { world.scene.remove(bot.mesh); bot = null; }
+  if (bot) { disposeDeep(bot.mesh); bot = null; }
   const M = MAPS[id];
   track = new Track(world.scene, M.points, M);
   setGround(track);
   kitchen = new M.Scenery(world.scene, track);
-  trash = new Trash(world.scene, track);
+  trash = new Trash(world.scene, track); trash.camera = world.camera;
   pickups = new Pickups(world.scene, track);
   combat = new Combat(world.scene, track);
   hazards = new Hazards(world.scene, track, id);
@@ -60,7 +63,7 @@ function loadMap(id) {
   fx.weaponsGroup = combat.group;   // в темноте снаряды светятся
   combat.onRivalFire = r => chat.say(r, RP.fire, bot);
   combat.onRocket = tg => { if (tg && tg === bot) hud.say(P.rocketWarn, 1800); };
-  mapId = id; applyWeather();
+  mapId = id; applyWeather(); world.shadowDirty = true;
   hud.initMap(track);
   skids.clear(); smoke.clear();
   ghost.i = 0;
@@ -70,7 +73,7 @@ function loadMap(id) {
 
 // Гонка с выбранным роботом: старт чуть позади линии, носом по ходу трассы
 function startRace(id) {
-  if (bot) world.scene.remove(bot.mesh);
+  if (bot) disposeDeep(bot.mesh);   // модель прошлой гонки — освободить, иначе каждая гонка копит ~17 геометрий на робота
   clearBoom(); hud.hideOut();
   bot = new Robot(world.scene, painted(ROBOTS[id]));   // с выбранной в меню окраской
   // Стартовая решётка: все в колонну по центру трассы за линией старта, игрок — третьим.
@@ -117,8 +120,24 @@ mapMenu.snapshot = () => {
   return shot;
 };
 mapMenu.onWeather = () => applyWeather();
+const SIM = new URLSearchParams(location.search).get('sim');
+const PERF = new URLSearchParams(location.search).get('perf') || new URLSearchParams(location.search).get('leak');
+if (new URLSearchParams(location.search).get('leak')) {
+  // ?leak=N — проверка утечек: N кругов смены всех карт, память после каждого (см. leak.js)
+  chat.say = () => {};
+  runLeak({ world, loadMap, startSimRace, simStep, frame: perfFrame });
+} else if (PERF) {
+  // ?perf=секунд — замер производительности: гонка ботов на каждой карте с настоящей отрисовкой (см. perf.js)
+  chat.say = () => {};
+  runPerf({ world, loadMap, startSimRace, simStep, frame: perfFrame });
+} else if (SIM) {
+  // ?sim=N — балансировка: N гонок только из ботов, без отрисовки, в ускоренном времени (см. sim.js)
+  chat.say = () => {};
+  runSim({ n: +SIM || 100, loadMap, setSimTime, startSimRace, simStep, simDone });
+} else {
 loadMap(settings.map);
 mapMenu.show();
+}
 function toMenu() { chat.clear(); clearBoom(); hud.hideOut(); hud.hideResults(); mode = 'menu'; menu.show(bot.spec.id); }
 // ── Пауза: Esc в гонке (сворачивание окна паузу не ставит). На паузе M — в меню ──
 // Продолжение — не сразу, а после отсчёта 3-2-1 (часы всё это время стоят)
@@ -618,8 +637,46 @@ function bumps(t) {
   }, t / 1000);
 }
 
+// ── Симуляция для балансировки: гонка из одних соперников, игрока нет (bot = null) ──
+function startSimRace(ids) {
+  for (const r of rivals) r.dispose();
+  bot = null; mode = 'sim';
+  race = { mode: settings.mode === 'arena' ? 'arena' : 'race', laps: settings.laps || 3, crossings: 0 };
+  const slot = k => [-4 - k * 3, 0];
+  rivals = ids.map((rid, k) => { const r = new Rival(world.scene, ROBOTS[rid], track), [s, l] = slot(k); r.place(s, l); r.simId = rid; return r; });
+  trash.reset(); pickups.reset(); combat.clear();
+  return rivals;
+}
+// Один шаг симуляции: всё то же, что в гонке, кроме игрока, камеры, звука и надписей
+function simStep(t, dt) {
+  for (const { bot: who, kind } of trash.update(t / 1000, dt, rivals.filter(r => !r.out).map(r => r.bot))) {
+    const K = C.trash.kinds[kind];
+    if (K.charge) { who.bat = Math.min(100, who.bat + K.charge); continue; }
+    who.bin = Math.min(100, who.bin + K.fill); who.binValue += K.value;
+    who.rival.score = (who.rival.score || 0) + K.value;
+    if (K.damage) who.rival.hurt(K.damage);
+  }
+  updateRivals(t, dt);
+  bumps(t);
+  catchUp(t);
+  for (const r of rivals) if (!r.finishedAt && !r.out && r.race.crossings >= race.laps + 1) r.finishedAt = t;
+}
+// Кадр замера (?perf): то, что в игре рисуется вокруг гонки, — камера за лидером, эффекты, декорации
+function perfFrame(dt, t) {
+  const lead = rivals.filter(r => !r.out).sort((a, b) => b.progress() - a.progress())[0];
+  if (lead) world.follow(lead.bot, dt);
+  fx.update(dt, t / 1000, rivals.filter(r => !r.out).map(r => r.bot), lead?.bot, world.camTarget);
+  kitchen.update(t / 1000);
+}
+// Гонка кончилась? Гонка — все живые финишировали; арена — остался один
+function simDone() {
+  const alive = rivals.filter(r => !r.out);
+  return race.mode === 'arena' ? alive.length <= 1 : alive.every(r => r.finishedAt);
+}
+
 let last = 0;
 function loop() {
+  if (mode === 'sim') return;
   const t = performance.now();   // игровое время (стоит на паузе), см. clock.js
   if (isPaused()) {
     // игра стоит, но модели ставим на их места — иначе на старте (до первого кадра гонки) роботов не видно
@@ -663,4 +720,4 @@ function loop() {
   world.render();
   requestAnimationFrame(loop);
 }
-requestAnimationFrame(loop);
+if (!SIM && !PERF) requestAnimationFrame(loop);

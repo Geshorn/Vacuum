@@ -3,6 +3,16 @@ import { clamp, approach, wrap } from './util.js';
 import { buildModel } from './models.js';
 import * as THREE from 'three';
 
+// мягкое пятно-тень под роботом (общие геометрия и материал на всех)
+const BLOB_TEX = (() => {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 64; const x = cv.getContext('2d');
+  const g = x.createRadialGradient(32, 32, 4, 32, 32, 32); g.addColorStop(0, 'rgba(0,0,0,0.55)'); g.addColorStop(0.6, 'rgba(0,0,0,0.3)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  x.fillStyle = g; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(cv);
+})();
+const BLOB_GEO = new THREE.PlaneGeometry(1, 1);
+const BLOB_MAT = new THREE.MeshBasicMaterial({ map: BLOB_TEX, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+const BLOB_M = new THREE.Matrix4(), BLOB_S = new THREE.Vector3();
+
 const DENT_GEO = new THREE.SphereGeometry(1, 12, 8);
 const DENT_MAT = new THREE.MeshStandardMaterial({ color: '#3b3238', roughness: 0.9, metalness: 0.3 });
 const SCORCH = new THREE.Color('#2a2026');
@@ -47,6 +57,11 @@ export class Robot {
     this.shellMat = m.shellMat; this.shellColor = m.shellMat.color.clone();
     this.dents = []; this.scratches = [];
     this.mesh.rotation.order = 'YXZ';   // крен — вокруг собственной продольной оси
+    // в карту теней робот не попадает (она перерисовывается не каждый кадр, тень бы отставала) —
+    // вместо этого мягкое пятно на земле под ним; пятно — ребёнок модели, но ставится в мировых координатах
+    this.mesh.traverse(o => { o.castShadow = false; });
+    this.blob = new THREE.Mesh(BLOB_GEO, BLOB_MAT); this.blob.matrixAutoUpdate = false; this.blob.renderOrder = -1;
+    this.mesh.add(this.blob);
     scene.add(this.mesh);
     // Состояние: позиция на плоскости XZ, угол, скорость вдоль носа (v) и боком (lat)
     Object.assign(this, { x: 0, z: 0, a: 0, v: 0, lat: 0, drifting: false, seg: -1, bat: 100, dead: false, deadUntil: 0 });
@@ -229,6 +244,12 @@ export class Robot {
     this.mesh.rotation.z = pitch;
     // лёгкий крен в заносе
     this.mesh.rotation.x = clamp(-this.lat * 0.012, -0.15, 0.15);
+    // пятно-тень: на земле под роботом, в полёте меньше и бледнее, в рву не видно
+    const gy = ground?.hasHeight && this.lastSeg != null ? ground.heightAtPos(this.lastSeg, this.x, this.z) : 0;
+    const lift = Math.max(0, y - gy), k = this.ditch ? 0.001 : Math.max(0.45, 1 - lift * 0.08) * this.s.radius * 2.3;
+    this.mesh.updateMatrix();
+    BLOB_M.makeRotationX(-Math.PI / 2).scale(BLOB_S.set(k, k, 1)).setPosition(this.x + 0.4, gy + 0.06, this.z + 0.3);
+    this.blob.matrix.copy(this.mesh.matrix).invert().multiply(BLOB_M);
     spinAll(this.spinners, this.v, dt);
     this.updateWear();
     this.eyeMat.color.set(this.dead ? '#333' : this.bat < 20 ? (Math.floor(t / 300) % 2 ? '#ff3b30' : '#551010') : this.drifting ? '#ffcc00' : '#6ef0ff');

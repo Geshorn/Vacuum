@@ -1,6 +1,7 @@
 import { C } from './config.js';
 import { Robot } from './robot.js';
 import { Smoke } from './smoke.js';
+import { disposeDeep } from './util.js';
 import { Explosion } from './explosion.js';
 import { diff } from './settings.js';
 
@@ -119,7 +120,7 @@ export class Rival {
   progress() { return this.race.crossings * this.track.n + this.bot.seg; }
 
   dispose() {
-    this.scene.remove(this.bot.mesh); this.scene.remove(this.smoke.group);
+    disposeDeep(this.bot.mesh); disposeDeep(this.smoke.group);
     if (this.boom) this.boom.dispose();
   }
 }

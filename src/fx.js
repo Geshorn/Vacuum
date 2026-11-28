@@ -143,7 +143,8 @@ export class Effects {
     if (mode === 'blackout' && !this.spot) {
       // фара игрока — настоящий прожектор с тенью: стенки загораживают свет, за бортик он не попадает
       const sp = this.spot = new THREE.SpotLight('#fff1c9', 320, 48, 0.5, 0.6, 1.3);
-      sp.castShadow = true; sp.shadow.mapSize.set(1024, 1024); sp.shadow.bias = -0.002; sp.shadow.camera.near = 0.5;
+      sp.castShadow = true; sp.shadow.mapSize.set(512, 512); sp.shadow.bias = -0.002; sp.shadow.camera.near = 0.5;
+      sp.shadow.camera.far = 26;   // тени только вблизи фары: дальше свет слабый, а проход по сцене дорогой (карта теней перерисовывается каждый кадр)
       this.group.add(sp, sp.target);
       this.runway();
     }

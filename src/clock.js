@@ -8,3 +8,9 @@ performance.now = () => (since || real()) - offset;
 export const isPaused = () => since > 0;
 export function pauseClock() { if (!since) since = real(); }
 export function resumeClock() { if (since) { offset += real() - since; since = 0; } }
+
+// Режим симуляции (?sim=N): время не реальное, а виртуальное — его двигает сам симулятор шагами dt
+let simT = null;
+export function setSimTime(ms) { simT = ms; }
+const base = performance.now;
+performance.now = () => simT ?? base();

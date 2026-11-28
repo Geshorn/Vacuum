@@ -54,6 +54,9 @@ function subwayTexture() {
 
 export { M, mat, DEPTH, GAP, GAP_IN, COUNTER_H, rnd2 };
 
+const MERGE_CELL = 64;     // размер участка склейки (единиц мира)
+const SMALL_SHADOW = 0.8;   // радиус (в единицах мира), меньше которого деталь не отбрасывает тень
+
 export class Kitchen {
   constructor(scene, track) {
     this.track = track; this.taken = []; this.anim = [];
@@ -72,11 +75,15 @@ export class Kitchen {
   // и прозрачное (стекло, вода, пар) не склеиваются.
   mergeStatic() {
     this.g.updateMatrixWorld(true);
-    const CELL = 64, buckets = new Map(), victims = [];
+    const CELL = +new URLSearchParams(location.search).get('cell') || MERGE_CELL, buckets = new Map(), victims = [];   // ?cell=N — для подбора
     const isDynamic = o => { for (let p = o; p && p !== this.g; p = p.parent) if (p.userData.dynamic) return true; return false; };
     this.g.traverse(o => {
       if (!o.isMesh || o.material.transparent || Array.isArray(o.material) || isDynamic(o)) return;
       const c = new THREE.Vector3(); o.getWorldPosition(c);
+      // мелочь (цветочки, пуговки, камешки, ручки) тень не отбрасывает: под камерой сверху её не видно,
+      // а в проходе теней она стоила бы столько же, сколько шкаф
+      if (o.castShadow) { if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere(); const sc = new THREE.Vector3(); o.getWorldScale(sc);
+        if (o.geometry.boundingSphere.radius * Math.max(sc.x, sc.y, sc.z) < SMALL_SHADOW) o.castShadow = false; }
       const key = `${o.material.uuid}|${o.castShadow ? 1 : 0}|${Math.floor(c.x / CELL)}|${Math.floor(c.z / CELL)}`;
       let geo = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
       for (const name of Object.keys(geo.attributes)) if (!['position', 'normal', 'uv'].includes(name)) geo.deleteAttribute(name);
